@@ -1,0 +1,2005 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GAUNG.ai — Analytics Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --gm: #ea008c; --go: #ff8a10;
+      --bg: #131316; --s1: #1e1e23; --s2: #27272e; --s3: #32323c;
+      --text: #f0f0f5; --muted: #7a7a8e; --border: #2e2e38;
+      --sw: 220px;
+      /* Neutral data palette */
+      --d1:#4f8ef7; --d2:#a78bfa; --d3:#34d399; --d4:#f59e0b;
+      --d5:#f87171; --d6:#60a5fa; --d7:#818cf8; --d8:#fbbf24;
+    }
+    html,body { height:100%; font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); }
+
+    /* ── LOGIN ─────────────────────────────── */
+    #login-screen { display:none; position:fixed; inset:0; z-index:999; background:var(--bg); align-items:center; justify-content:center; }
+    #login-screen.show { display:flex; }
+    .login-box { background:var(--s1); border:1px solid var(--border); border-radius:16px; padding:44px 52px; text-align:center; width:380px; }
+    .login-brand { font-size:24px; font-weight:800; margin-bottom:4px; }
+    .login-brand span { background:linear-gradient(90deg,var(--gm),var(--go)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .login-tag { font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:28px; }
+    .login-client { font-size:17px; font-weight:700; margin-bottom:22px; }
+    .login-input { width:100%; background:var(--s2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:12px 16px; font-size:14px; outline:none; margin-bottom:10px; }
+    .login-input:focus { border-color:var(--gm); }
+    .login-btn { width:100%; background:linear-gradient(90deg,var(--gm),var(--go)); color:#fff; border:none; border-radius:8px; padding:12px; font-size:14px; font-weight:700; cursor:pointer; }
+    .login-err { color:#f87171; font-size:12px; margin-top:8px; display:none; }
+
+    /* ── SIDEBAR ───────────────────────────── */
+    #sidebar { position:fixed; top:0; left:0; bottom:0; width:var(--sw); background:#0e0e12; border-right:1px solid var(--border); display:flex; flex-direction:column; z-index:100; }
+    .sb-logo { padding:20px 18px 16px; border-bottom:1px solid var(--border); }
+    .sb-logo-mark { font-size:21px; font-weight:800; letter-spacing:-.5px; }
+    .sb-logo-mark span { background:linear-gradient(90deg,var(--gm),var(--go)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .sb-logo-tag { font-size:9.5px; color:var(--muted); letter-spacing:1.2px; text-transform:uppercase; margin-top:2px; }
+    .sb-divider { height:1px; background:var(--border); margin:10px 0; }
+    .sb-section { padding:14px 18px 6px; font-size:9px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); display:flex; align-items:center; justify-content:space-between; }
+    .sb-privacy-btn { background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px; padding:2px 4px; border-radius:4px; }
+    .sb-privacy-btn:hover { color:var(--text); background:var(--s2); }
+    .sb-item { display:flex; align-items:center; gap:9px; padding:9px 18px; cursor:pointer; font-size:13px; color:var(--muted); border-left:3px solid transparent; transition:all .15s; }
+    .sb-item:hover { background:var(--s1); color:var(--text); }
+    .sb-item.active { background:var(--s1); color:var(--text); border-left-color:var(--gm); }
+    .sb-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+    .sb-name { transition:filter .2s; }
+    .privacy-on .sb-name { filter:blur(5px); user-select:none; }
+    .sb-footer { margin-top:auto; padding:14px 18px; border-top:1px solid var(--border); font-size:10px; color:var(--muted); }
+    .sb-soon-badge { font-size:8px; font-weight:700; color:var(--muted); background:var(--s3); border-radius:3px; padding:1px 6px; margin-left:auto; letter-spacing:.5px; text-transform:uppercase; flex-shrink:0; }
+
+    /* ── MAIN ──────────────────────────────── */
+    #main { margin-left:var(--sw); display:flex; flex-direction:column; min-height:100vh; }
+
+    /* ── TOP BAR — always GAUNG gradient ───── */
+    #top-bar {
+      position:sticky; top:0; z-index:50; height:58px;
+      background:linear-gradient(135deg, var(--gm) 0%, var(--go) 100%);
+      display:flex; align-items:center; justify-content:space-between; padding:0 24px;
+    }
+    .tb-left { display:flex; align-items:center; gap:12px; }
+    .tb-name { font-size:17px; font-weight:800; color:#fff; }
+    .tb-sub { font-size:11px; color:rgba(255,255,255,.65); }
+    .tb-sync { font-size:10px; background:rgba(0,0,0,.25); color:rgba(255,255,255,.85); padding:3px 10px; border-radius:20px; }
+    .tb-right { display:flex; gap:8px; align-items:center; }
+    .btn { display:inline-flex; align-items:center; gap:5px; padding:6px 14px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; border:none; transition:opacity .15s; }
+    .btn:hover { opacity:.82; }
+    .btn-ghost { background:rgba(255,255,255,.18); color:#fff; }
+    .btn-solid { background:#fff; color:#111; }
+
+    /* ── PAGE TABS ─────────────────────────── */
+    #page-nav { display:flex; border-bottom:1px solid var(--border); background:var(--s1); padding:0 24px; }
+    .ptab { padding:13px 18px; font-size:12.5px; font-weight:600; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; transition:all .15s; white-space:nowrap; }
+    .ptab:hover { color:var(--text); }
+    .ptab.active { color:var(--text); border-bottom-color:var(--gm); }
+
+    /* ── PAGES ─────────────────────────────── */
+    .page { display:none; padding:22px 24px 36px; }
+    .page.active { display:block; }
+    #error-banner { display:none; background:#2a1018; border:1px solid #c0392b; border-radius:8px; padding:12px 16px; margin:14px 24px 0; font-size:12.5px; color:#f87171; }
+
+    /* ── KPI GRID ──────────────────────────── */
+    .kpi-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px; }
+    .kpi-card { background:var(--s1); border:1px solid var(--border); border-radius:10px; padding:16px 18px; position:relative; overflow:hidden; }
+    .kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--gm); }
+    .kpi-card.orange::before { background:var(--go); }
+    .kpi-card.green::before { background:var(--d3); }
+    .kpi-card.blue::before { background:var(--d1); }
+    .kpi-card.purple::before { background:var(--d2); }
+    .kpi-label { font-size:9.5px; color:var(--muted); font-weight:700; letter-spacing:.8px; text-transform:uppercase; margin-bottom:7px; }
+    .kpi-val { font-size:30px; font-weight:800; line-height:1; }
+    .kpi-sub { font-size:10.5px; color:var(--muted); margin-top:4px; }
+
+    /* ── INSIGHTS ──────────────────────────── */
+    .insights-card { background:var(--s1); border:1px solid var(--border); border-radius:12px; padding:24px 28px; margin-bottom:22px; }
+    .insights-header { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
+    .insights-icon { width:36px; height:36px; border-radius:8px; background:linear-gradient(135deg,var(--gm),var(--go)); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+    .insights-title { font-size:16px; font-weight:800; }
+    .insights-subtitle { font-size:12px; color:var(--muted); margin-top:1px; }
+    .insights-cols { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    .insights-col h4 { font-size:13px; font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+    .ic-tag { font-size:10px; padding:2px 8px; border-radius:4px; font-weight:700; }
+    .ic-green { background:#0a2e1e; color:var(--d3); }
+    .ic-orange { background:#2e1a08; color:var(--go); }
+    .insights-col ul { list-style:none; display:flex; flex-direction:column; gap:8px; }
+    .insights-col li { font-size:13px; color:var(--muted); padding-left:16px; position:relative; line-height:1.5; }
+    .insights-col li::before { content:'→'; position:absolute; left:0; color:var(--gm); font-weight:700; }
+    .insights-col li strong { color:var(--text); }
+
+    /* ── CHART CARDS ───────────────────────── */
+    .chart-row { display:grid; gap:14px; margin-bottom:14px; }
+    .c2 { grid-template-columns:1fr 1fr; }
+    .c3l { grid-template-columns:3fr 2fr; }
+    .c1 { grid-template-columns:1fr; }
+    .chart-card { background:var(--s1); border:1px solid var(--border); border-radius:10px; padding:18px 20px; }
+    .ct-title { font-size:13px; font-weight:700; margin-bottom:2px; }
+    .ct-desc { font-size:11.5px; color:var(--muted); margin-bottom:14px; line-height:1.5; }
+    .cw { position:relative; }
+
+    /* ── STAT ROW ──────────────────────────── */
+    .stat-row { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px; }
+    .stat-box { background:var(--s1); border:1px solid var(--border); border-radius:10px; padding:16px; text-align:center; }
+    .stat-val { font-size:28px; font-weight:800; line-height:1; }
+    .stat-label { font-size:11px; color:var(--muted); margin-top:5px; }
+
+    /* ── FUNNEL BAR ────────────────────────── */
+    .funnel-visual { display:flex; flex-direction:column; gap:8px; }
+    .funnel-row { display:flex; align-items:center; gap:12px; }
+    .funnel-label { font-size:11.5px; color:var(--muted); width:140px; flex-shrink:0; text-align:right; }
+    .funnel-bar-wrap { flex:1; background:var(--s2); border-radius:4px; height:28px; position:relative; overflow:hidden; }
+    .funnel-bar { height:100%; border-radius:4px; display:flex; align-items:center; padding:0 10px; transition:width .6s ease; }
+    .funnel-bar-text { font-size:11px; font-weight:700; color:#fff; white-space:nowrap; }
+    .funnel-pct { font-size:10.5px; color:var(--muted); width:44px; text-align:right; flex-shrink:0; }
+
+    /* ── ALERTS ────────────────────────────── */
+    .section-hd { font-size:13px; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+    .cbadge { background:#c0392b; color:#fff; font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; }
+    .cbadge.ok { background:#1a5c3a; color:var(--d3); }
+    .alert-list { display:flex; flex-direction:column; gap:7px; margin-bottom:22px; }
+    .alert-item { background:var(--s1); border:1px solid #c0392b33; border-left:3px solid #c0392b; border-radius:8px; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .alert-name { font-size:12.5px; font-weight:600; }
+    .alert-meta { font-size:11px; color:var(--muted); margin-top:2px; }
+    .alert-days { font-size:10px; background:#c0392b22; color:#f87171; padding:2px 8px; border-radius:4px; font-weight:700; white-space:nowrap; }
+    .empty-state { font-size:12.5px; color:var(--muted); padding:10px 0; }
+
+    /* ── FILTERS ───────────────────────────── */
+    .filter-bar { display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+    .fsel { background:var(--s2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:7px 11px; font-size:12px; outline:none; cursor:pointer; }
+    .fsrch { background:var(--s2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:7px 12px; font-size:12px; outline:none; flex:1; min-width:180px; }
+    .fsrch::placeholder { color:var(--muted); }
+    .freset { font-size:11px; color:var(--muted); cursor:pointer; }
+    .freset:hover { color:var(--text); }
+    .filter-count { font-size:11.5px; color:var(--muted); margin-left:auto; }
+
+    /* ── TABLE ─────────────────────────────── */
+    .table-wrap { overflow-x:auto; border-radius:10px; border:1px solid var(--border); }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    thead th { background:var(--s2); padding:9px 13px; text-align:left; font-size:9.5px; font-weight:700; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; white-space:nowrap; cursor:pointer; user-select:none; }
+    thead th:hover { color:var(--text); }
+    tbody tr { border-top:1px solid var(--border); transition:background .1s; }
+    tbody tr:hover { background:var(--s2); }
+    tbody td { padding:8px 13px; vertical-align:middle; }
+    .td-name { font-weight:600; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .td-link { color:inherit; text-decoration:none; }
+    .td-link:hover { color:var(--gm); }
+    .td-m { color:var(--muted); }
+
+    /* ── BADGES ────────────────────────────── */
+    .badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:9.5px; font-weight:700; text-transform:capitalize; white-space:nowrap; }
+    .b-hot      { background:#3d1508; color:#f87171; }
+    .b-invoice  { background:#3d2a00; color:var(--d4); }
+    .b-response { background:#1a3040; color:var(--d1); }
+    .b-contact  { background:#1e1e30; color:var(--d7); }
+    .b-new      { background:#1a2e20; color:var(--d3); }
+    .b-nowa     { background:var(--s3); color:var(--muted); }
+    .b-won      { background:#0a2a1a; color:var(--d3); border:1px solid var(--d3)33; }
+    .b-lost     { background:#2a1010; color:var(--d5); }
+    .b-def      { background:var(--s3); color:var(--muted); }
+    .b-wa-y     { background:#0a2a18; color:#25d366; }
+    .b-wa-n     { background:var(--s3); color:var(--muted); }
+    .stars      { color:var(--d4); letter-spacing:1px; }
+
+    /* ── PAGINATION ────────────────────────── */
+    .pagination { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:12px; color:var(--muted); }
+    .pg-btn { background:var(--s2); border:1px solid var(--border); color:var(--text); border-radius:5px; padding:5px 11px; font-size:11.5px; cursor:pointer; }
+    .pg-btn:hover { background:var(--s3); }
+    .pg-btn:disabled { opacity:.35; cursor:default; }
+    .pg-info { flex:1; }
+
+    /* ── MAP ───────────────────────────────── */
+    #map-container { height:580px; border-radius:12px; overflow:hidden; border:1px solid var(--border); }
+    .map-legend { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+    .map-legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); }
+    .map-legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+    .map-stat-bar { display:flex; gap:16px; margin-top:10px; }
+    .map-stat { font-size:11px; color:var(--muted); }
+    .map-stat strong { color:var(--text); }
+    /* Override cluster colors for dark theme */
+    .marker-cluster-small  { background-color:rgba(79,142,247,.35)!important; }
+    .marker-cluster-small div  { background-color:rgba(79,142,247,.65)!important; color:#fff!important; }
+    .marker-cluster-medium { background-color:rgba(167,139,250,.35)!important; }
+    .marker-cluster-medium div { background-color:rgba(167,139,250,.65)!important; color:#fff!important; }
+    .marker-cluster-large  { background-color:rgba(234,0,140,.35)!important; }
+    .marker-cluster-large div  { background-color:rgba(234,0,140,.65)!important; color:#fff!important; }
+    .leaflet-popup-content-wrapper { background:#fff; border:none; color:#111; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,.18); }
+    .leaflet-popup-tip { background:#fff; }
+    .leaflet-popup-content { margin:12px 14px; }
+
+    /* ── LOADING ───────────────────────────── */
+    #loading-screen { position:fixed; inset:0; margin-left:var(--sw); background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; z-index:200; }
+    .spinner { width:36px; height:36px; border-radius:50%; border:3px solid var(--border); border-top-color:var(--gm); animation:spin .75s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .loading-text { font-size:12.5px; color:var(--muted); }
+
+    /* ── RESPONSIVE ────────────────────────── */
+    @media(max-width:1100px) { .kpi-grid,.stat-row { grid-template-columns:repeat(3,1fr); } .c2,.c3l { grid-template-columns:1fr; } }
+    @media(max-width:700px)  { .kpi-grid,.stat-row { grid-template-columns:repeat(2,1fr); } .insights-cols { grid-template-columns:1fr; } }
+
+    /* ── PRINT / EXPORT HELPER ─────────────── */
+    .no-export { /* hidden in export */ }
+
+    /* ── PRIORITY SCORE BADGE ──────────────── */
+    .ps-badge { display:inline-flex; width:34px; height:34px; border-radius:50%; align-items:center; justify-content:center; font-size:10px; font-weight:800; border:2px solid; flex-shrink:0; }
+    .ps-high { border-color:#34d399; color:#34d399; background:#071a10; }
+    .ps-mid  { border-color:#f59e0b; color:#f59e0b; background:#1a1000; }
+    .ps-low  { border-color:#555; color:var(--muted); background:var(--s2); }
+
+    /* ── WA AI INSIGHTS ───────────────────── */
+    .wa-card { background:var(--s1); border:1px solid var(--border); border-left:3px solid #25d366; border-radius:12px; padding:20px 24px; margin-bottom:20px; }
+    .wa-card-hdr { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+    .wa-card-icon { width:32px; height:32px; border-radius:8px; background:linear-gradient(135deg,#128c7e,#25d366); display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+    .wa-card-title { font-size:14px; font-weight:800; }
+    .wa-card-sub { font-size:11px; color:var(--muted); margin-top:1px; }
+    .wa-grid { display:grid; grid-template-columns:3fr 2fr; gap:20px; }
+    .wa-pains { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .wa-pain { background:var(--s2); border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
+    .wa-pain-title { font-size:11.5px; font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:6px; }
+    .wa-pain-desc { font-size:10.5px; color:var(--muted); line-height:1.5; margin-bottom:8px; }
+    .wa-quote { font-size:10px; color:var(--d1); font-style:italic; border-left:2px solid var(--d1); padding-left:7px; margin-bottom:4px; line-height:1.4; }
+    .wa-actions { display:flex; flex-direction:column; gap:8px; }
+    .wa-action { display:flex; gap:10px; align-items:flex-start; background:var(--s2); border-radius:8px; padding:11px 13px; }
+    .wa-action-num { width:22px; height:22px; border-radius:50%; background:linear-gradient(135deg,var(--gm),var(--go)); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:800; color:#fff; flex-shrink:0; margin-top:1px; }
+    .wa-action-body { flex:1; }
+    .wa-action-title { font-size:11.5px; font-weight:700; margin-bottom:2px; }
+    .wa-action-desc { font-size:10.5px; color:var(--muted); line-height:1.5; }
+
+    /* ── BENCHMARK PANEL ───────────────────── */
+    .bench-wrap { background:var(--s1); border:1px solid var(--border); border-radius:12px; padding:20px 24px; margin-bottom:20px; }
+    .bench-head { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+    .bench-icon { width:32px; height:32px; border-radius:8px; background:linear-gradient(135deg,var(--d2),var(--d1)); display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+    .bench-htitle { font-size:14px; font-weight:800; }
+    .bench-hsub { font-size:11px; color:var(--muted); margin-top:1px; }
+    .bench-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    @media(max-width:900px) { .bench-grid { grid-template-columns:1fr; } }
+    .bench-card { background:var(--s2); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
+    .bench-name { font-size:10px; font-weight:700; color:var(--muted); letter-spacing:.8px; text-transform:uppercase; margin-bottom:6px; }
+    .bench-card-desc { font-size:10.5px; color:var(--muted); margin-bottom:10px; line-height:1.4; }
+    .bench-compare { display:flex; flex-direction:column; gap:5px; }
+    .bench-row { display:flex; align-items:center; justify-content:space-between; font-size:12px; }
+    .bench-lbl { color:var(--muted); }
+    .bench-num { font-weight:700; }
+    .bench-divider { height:1px; background:var(--border); margin:3px 0; }
+    .bench-big { font-size:22px; font-weight:800; }
+    .bench-verdict { font-size:10.5px; font-weight:700; padding:3px 10px; border-radius:5px; margin-top:8px; display:inline-block; }
+    .vd-win { background:#0a2e1e; color:#34d399; }
+    .vd-ok  { background:#2e1a00; color:#f59e0b; }
+    .vd-lag { background:#2a1010; color:#f87171; }
+
+    /* ── PRIORITY LIST ─────────────────────── */
+    .priority-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); }
+    .priority-row:last-child { border-bottom:none; }
+    .priority-info { flex:1; min-width:0; }
+    .priority-name { font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .priority-meta { font-size:10.5px; color:var(--muted); margin-top:1px; }
+    .priority-rank { font-size:10px; color:var(--muted); flex-shrink:0; width:20px; text-align:right; }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-brand"><span>GAUNG</span>.ai</div>
+    <div class="login-tag">Analytics Dashboard</div>
+    <div class="login-client" id="lc-name">—</div>
+    <input class="login-input" id="lc-pw" type="password" placeholder="Masukkan password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" onclick="doLogin()">Masuk</button>
+    <div class="login-err" id="lc-err">Password salah. Silakan coba lagi.</div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div class="loading-text">Memuat data kampanye…</div>
+</div>
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logo-mark"><span>GAUNG</span>.ai</div>
+    <div class="sb-logo-tag">Analytics Dashboard</div>
+  </div>
+  <div class="sb-section">
+    <span>Klien</span>
+    <button class="sb-privacy-btn" id="privacy-btn" onclick="togglePrivacy()" title="Sembunyikan nama klien">👁</button>
+  </div>
+  <div id="sb-clients"></div>
+  <div class="sb-footer">v2.1 &nbsp;·&nbsp; GAUNG.ai</div>
+</nav>
+
+<!-- MAIN -->
+<main id="main" style="display:none">
+  <div id="top-bar">
+    <div class="tb-left">
+      <div>
+        <div class="tb-name" id="tb-name">—</div>
+        <div class="tb-sub">Lead Generation Campaign Report</div>
+      </div>
+      <span class="tb-sync" id="tb-sync">Memuat…</span>
+    </div>
+    <div class="tb-right">
+      <button class="btn btn-ghost" onclick="loadData()">↻ Refresh</button>
+      <button class="btn btn-solid" onclick="downloadFullReport()">⬇ Download Report</button>
+    </div>
+  </div>
+
+  <div id="page-nav">
+    <div class="ptab active" data-page="overview"   onclick="showPage('overview',this)">📊 Overview</div>
+    <div class="ptab"        data-page="pipeline"   onclick="showPage('pipeline',this)">🔥 Pipeline</div>
+    <div class="ptab"        data-page="geographic" onclick="showPage('geographic',this)">🗺 Geographic</div>
+    <div class="ptab"        data-page="map"        onclick="showPage('map',this)">📍 Peta Leads</div>
+    <div class="ptab"        data-page="leads"      onclick="showPage('leads',this)">📋 All Leads</div>
+  </div>
+
+  <div id="error-banner"></div>
+
+  <!-- ════ OVERVIEW ════════════════════════ -->
+  <div class="page active" id="page-overview">
+    <div class="kpi-grid" id="kpi-overview"></div>
+    <div class="bench-wrap" id="bench-panel"></div>
+    <div class="insights-card" id="insights-card"></div>
+    <div class="wa-card" id="wa-insights-card"></div>
+    <div class="chart-row c2">
+      <div class="chart-card">
+        <div class="ct-title">Distribusi Status Lead <span style="font-size:10px;font-weight:400;color:var(--muted)">(funnel kumulatif)</span></div>
+        <div class="ct-desc" id="desc-status"></div>
+        <div class="cw" style="height:200px"><canvas id="ch-status"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="ct-title">Kualitas Data (Rating Google Maps)</div>
+        <div class="ct-desc" id="desc-score"></div>
+        <div class="cw" style="height:200px"><canvas id="ch-score"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-row c2">
+      <div class="chart-card">
+        <div class="ct-title">Segmen Bisnis (Kategori Lead)</div>
+        <div class="ct-desc" id="desc-category"></div>
+        <div class="cw" style="height:240px"><canvas id="ch-category"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="ct-title">🎯 Top Priority Leads</div>
+        <div class="ct-desc" id="desc-priority"></div>
+        <div id="priority-list" style="max-height:240px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ PIPELINE ════════════════════════ -->
+  <div class="page" id="page-pipeline">
+    <div class="stat-row" id="pipeline-stats"></div>
+    <div class="chart-row c2" style="margin-bottom:20px">
+      <div class="chart-card">
+        <div class="ct-title">Funnel Konversi Kampanye</div>
+        <div class="ct-desc" id="desc-funnel"></div>
+        <div id="funnel-visual" class="funnel-visual" style="padding:8px 0"></div>
+      </div>
+      <div class="chart-card">
+        <div class="ct-title">Reachability via WhatsApp</div>
+        <div class="ct-desc" id="desc-wa"></div>
+        <div class="cw" style="height:200px"><canvas id="ch-wa"></canvas></div>
+      </div>
+    </div>
+    <div class="section-hd">
+      ⚠ Hot Leads Butuh Follow-up Sales
+      <span class="cbadge" id="hot-count">0</span>
+    </div>
+    <div id="hot-list" class="alert-list"></div>
+    <div class="section-hd" style="margin-top:8px">
+      ⏰ Leads Overdue (>7 hari tidak dikontak)
+      <span class="cbadge" id="alert-count">0</span>
+    </div>
+    <div id="alert-list" class="alert-list"></div>
+  </div>
+
+  <!-- ════ GEOGRAPHIC ══════════════════════ -->
+  <div class="page" id="page-geographic">
+    <div class="chart-row c3l">
+      <div class="chart-card">
+        <div class="ct-title">Top 10 Kota — Jumlah Lead</div>
+        <div class="ct-desc" id="desc-city"></div>
+        <div class="cw" style="height:280px"><canvas id="ch-city"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="ct-title">Distribusi Provinsi</div>
+        <div class="ct-desc" id="desc-prov"></div>
+        <div class="cw" style="height:280px"><canvas id="ch-prov"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-row c2">
+      <div class="chart-card">
+        <div class="ct-title">🔥 Hot Leads per Kota</div>
+        <div class="ct-desc" id="desc-hot-city"></div>
+        <div class="cw" style="height:180px"><canvas id="ch-hot-city"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="ct-title">Response Rate per Kota</div>
+        <div class="ct-desc" id="desc-response-city"></div>
+        <div class="cw" style="height:180px"><canvas id="ch-resp-city"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ PETA LEADS ════════════════════════ -->
+  <div class="page" id="page-map">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:15px;font-weight:800">Peta Sebaran Lead Indonesia</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:3px" id="map-subtitle">Klik tab ini untuk memuat peta…</div>
+      </div>
+      <div class="map-legend" id="map-legend"></div>
+    </div>
+    <div id="map-container"></div>
+    <div class="map-stat-bar" id="map-stats"></div>
+  </div>
+
+  <!-- ════ ALL LEADS ════════════════════════ -->
+  <div class="page" id="page-leads">
+    <div class="filter-bar">
+      <select class="fsel" id="f-status" onchange="applyFilters()"><option value="">Semua Status</option></select>
+      <select class="fsel" id="f-city"     onchange="applyFilters()"><option value="">Semua Kota</option></select>
+      <select class="fsel" id="f-category" onchange="applyFilters()"><option value="">Semua Kategori</option></select>
+      <select class="fsel" id="f-wa"       onchange="applyFilters()">
+        <option value="">WA: Semua</option>
+        <option value="yes">WA: Ada</option>
+        <option value="no">WA: Tidak Ada</option>
+      </select>
+      <input class="fsrch" id="f-search" placeholder="Cari nama bisnis…" oninput="applyFilters()">
+      <span class="freset" onclick="resetFilters()">✕ Reset</span>
+      <span class="filter-count" id="f-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th onclick="sortBy('title')">Nama Bisnis ↕</th>
+          <th onclick="sortBy('categoryName')">Kategori ↕</th>
+          <th onclick="sortBy('city')">Kota ↕</th>
+          <th onclick="sortBy('totalScore')">Rating ↕</th>
+          <th onclick="sortBy('priorityScore')" title="Skor AI: rating + ukuran bisnis + WA + pipeline stage">Skor AI ↕</th>
+          <th>WA</th>
+          <th onclick="sortBy('status')">Status ↕</th>
+          <th onclick="sortBy('lastContactDate')">Last Contact ↕</th>
+          <th>Catatan</th>
+        </tr></thead>
+        <tbody id="leads-tbody"></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <button class="pg-btn" id="pg-prev" onclick="changePage(-1)">← Sebelumnya</button>
+      <span class="pg-info" id="pg-info"></span>
+      <button class="pg-btn" id="pg-next" onclick="changePage(1)">Selanjutnya →</button>
+    </div>
+  </div>
+</main>
+
+<script>
+// ══════════════════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════════════════
+const CLIENTS = [
+  {
+    id: 'fira',
+    name: 'FIRA Group',
+    full: 'FIRA Truss & Roof',
+    password: 'fira2025',
+    sheetId: '1c3hoxZoYIIhamo3PvS9T20KVnpXau5-5iC3r112SH04',
+    sheetName: 'Master Leads',
+    dotColor: '#f04722',
+  },
+  { id:'asterlink',         name:'Asterlink',          dotColor:'#7c3aed', comingSoon:true },
+  { id:'blackcoco',         name:'Black Coco',          dotColor:'#92400e', comingSoon:true },
+  { id:'nusantara-plastik', name:'Nusantara Plastik',   dotColor:'#0369a1', comingSoon:true },
+  { id:'firli-digital',     name:'Firli Digital',       dotColor:'#0891b2', comingSoon:true },
+  { id:'monstermac',        name:'Monster Mac',         dotColor:'#16a34a', comingSoon:true },
+];
+
+// ── WhatsApp AI Agent Insights (dari analisis 2 bulan interaksi) ──
+const WA_INSIGHTS = {
+  updated: '13 April 2026',
+  painPoints: [
+    {
+      emoji: '🗂',
+      title: 'Catalog & Price List Hunter',
+      desc: 'Mayoritas leads mengumpulkan katalog dan price list untuk membandingkan harga antar supplier — bukan untuk membeli segera. Setelah menerima PDF, mereka diam.',
+      quotes: [
+        '"Boleh kirimkan katalog dan price list" — Undung Edy',
+        '"Baik saya pelajari dulu" — Fitria Yuliasari',
+        '"Masih lihat-lihat dulu" — Enti Djuraid',
+      ],
+    },
+    {
+      emoji: '🔨',
+      title: '"Material Only" vs Solusi Total',
+      desc: 'Pelanggan B2C mengharapkan solusi turnkey (material + pasang). Posisi Fira sebagai manufacturer-only membuat mereka beralih ke kontraktor yang menawarkan harga "terima beres".',
+      quotes: [
+        '"Material only? Atau bisa sama tenaganya?" — Yohanes Arifin',
+        '"Bisa sekalian pasang?" — multiple customers',
+      ],
+    },
+    {
+      emoji: '⏱',
+      title: 'Gesekan Handoff ke Sales',
+      desc: 'Setiap request price list diarahkan ke Pak Bambang. Pelanggan digital expect respons instan — jika >15–30 menit, minat turun drastis.',
+      quotes: [
+        '"Boleh liat price list nya pak" — hxh',
+      ],
+    },
+    {
+      emoji: '🏢',
+      title: 'B2B Noise — Intermediary & Reseller',
+      desc: 'Banyak leads adalah Interior Designer & Kontraktor yang sangat price-sensitive, mencari margin untuk klien mereka — bukan pembeli akhir.',
+      quotes: [
+        '"Apakah bisa saya dapatkan harga khusus supplier?" — Kasmara Interior',
+        '"Saya lagi buat proposal buat klien di Bali" — multiple B2B leads',
+        '"Untuk saat ini kami sedang pengajuan proposal" — Kasmara Interior',
+      ],
+    },
+  ],
+  actions: [
+    {
+      title: 'Lead Nurturing Aplikator Bi-Weekly',
+      desc: 'Kebanyakan aplikator menjawab "belum ada proyek sekarang" — hubungan ini harus dijaga. Kirim follow-up setiap 2 minggu: foto hasil proyek, promo terbatas, tips teknis. Pertimbangkan membangun Database Rekanan Aplikator dengan manfaat jelas bagi mereka: sertifikat rekanan resmi FIRA, referral proyek dari network FIRA, akses harga khusus mitra.',
+    },
+    {
+      title: 'Program Mitra Distributor & Toko',
+      desc: 'Target market baru: distributor dan toko bahan bangunan — tidak menunggu proyek, langsung stok produk. Buat program resmi yang menarik: Sertifikat Distributor Resmi FIRA, marketing kit (X-banner + product sample) yang bisa dipasang di toko, penawaran terbatas per kuartal. KPI utama: jumlah pendaftar Formulir Mitra Distributor Resmi FIRA Group.',
+    },
+    {
+      title: 'Tambah Nomor WA Khusus Distributor',
+      desc: 'Pisahkan channel outreach: nomor WA existing tetap untuk prospecting aplikator & lead nurturing, nomor WA baru untuk prospecting distributor & toko. Mencegah bottleneck dan mempercepat akuisisi kedua segmen secara paralel tanpa saling mengganggu.',
+    },
+    {
+      title: 'Setup Feedback Sales Lapangan',
+      desc: 'Buat formulir online sederhana (Google Form / Notion) untuk tim sales lapangan melaporkan progress hot lead: sudah dihubungi, meeting, penawaran dikirim, closing. Data terekap otomatis ke spreadsheet — menjawab pertanyaan "berapa yang betul-betul closing?" dan melengkapi data dashboard ini.',
+    },
+    {
+      title: 'Ekspansi ke Indonesia Timur',
+      desc: 'Surabaya mulai sangat kompetitif. Perluas scraping ke Samarinda, Balikpapan, dan perkuat coverage Bali + Makassar yang sudah ada leads-nya. Kota-kota Timur Indonesia memiliki pertumbuhan konstruksi tinggi dengan kompetitor lebih sedikit.',
+    },
+    {
+      title: 'Testing Meta Ads + AI',
+      desc: 'Mulai uji Meta Ads dengan targeting berbasis data leads existing: lookalike audience dari hot leads, retargeting yang pernah klik WA. Gunakan AI untuk generate variasi copy iklan dan visual. Tujuan: mempercepat akuisisi customer aplikator & pendaftaran mitra distributor secara paralel dengan outreach WA yang sudah berjalan.',
+    },
+  ],
+};
+
+// Status pipeline (in correct order)
+const PIPELINE = [
+  { key:'no whatsapp',       label:'No WhatsApp',       color:'var(--muted)',   group:'nowa'     },
+  { key:'new lead',          label:'New Lead',           color:'var(--d3)',      group:'new'      },
+  { key:'contacted',         label:'Contacted',          color:'var(--d7)',      group:'contact'  },
+  { key:'response received', label:'Response Received',  color:'var(--d1)',      group:'response' },
+  { key:'hot lead',          label:'Hot Lead',           color:'var(--go)',      group:'hot'      },
+  { key:'invoice sent',      label:'Invoice Sent',       color:'var(--d4)',      group:'invoice'  },
+  { key:'won',               label:'Won',                color:'var(--d3)',      group:'won'      },
+  { key:'lost',              label:'Lost',               color:'var(--d5)',      group:'lost'     },
+];
+const pipelineOrder = PIPELINE.map(p => p.key);
+const pipelineColor = Object.fromEntries(PIPELINE.map(p => [p.key, p.color]));
+
+// Status helpers
+const isNoWA      = r => r.status === 'no whatsapp';
+const isNewLead   = r => r.status === 'new lead';
+const hasWA       = r => !isNoWA(r);
+const isContacted = r => !isNoWA(r) && !isNewLead(r);
+const isResponded = r => ['response received','hot lead','invoice sent','won','lost'].includes(r.status);
+const isHot       = r => ['hot lead','invoice sent'].includes(r.status);
+const isInvoiced  = r => r.status === 'invoice sent';
+const isWon       = r => r.status === 'won';
+const isLost      = r => r.status === 'lost';
+
+// ══════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════
+let currentClient = CLIENTS[0];
+let allData = [], filteredData = [];
+let sortKey = 'status', sortDir = 1;
+let currentPage = 0; const ROWS = 25;
+let charts = {};
+let privacyOn = false;
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  Chart.defaults.color = '#7a7a8e';
+  Chart.defaults.font  = { family:"'Segoe UI',system-ui,sans-serif", size:11 };
+
+  const p  = new URLSearchParams(location.search);
+  const id = p.get('client');
+  if (id) {
+    // Client mode — hide sidebar
+    document.getElementById('sidebar').style.display = 'none';
+    document.getElementById('main').style.marginLeft = '0';
+    document.getElementById('loading-screen').style.marginLeft = '0';
+    const c = CLIENTS.find(x => x.id === id);
+    if (!c) { showError('Klien tidak ditemukan.'); showMain(true); return; }
+    currentClient = c;
+    const stored = sessionStorage.getItem('auth_' + id);
+    if (stored === c.password) { showMain(true); loadData(); }
+    else showLoginFor(c);
+  } else {
+    buildSidebar();
+    activate(CLIENTS[0]);
+  }
+});
+
+function buildSidebar() {
+  const nav = document.getElementById('sb-clients');
+  CLIENTS.forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'sb-item' + (c.id === currentClient.id ? ' active' : '');
+    el.id = 'sb-' + c.id;
+    el.innerHTML = `
+      <span class="sb-dot" style="background:${c.dotColor};${c.comingSoon?'opacity:.35':''}"></span>
+      <span class="sb-name" style="${c.comingSoon?'opacity:.55':''}">${c.name}</span>`;
+    el.onclick = () => activate(c);
+    nav.appendChild(el);
+  });
+}
+
+function activate(c) {
+  currentClient = c;
+  document.querySelectorAll('.sb-item').forEach(e => e.classList.remove('active'));
+  document.getElementById('sb-' + c.id)?.classList.add('active');
+  document.getElementById('tb-name').textContent = c.full || c.name;
+  if (c.comingSoon) {
+    allData = []; filteredData = [];
+    showMain(true);
+    showError(`Dashboard ${c.name} sedang dalam persiapan. Hubungi tim GAUNG.ai untuk aktivasi.`);
+    return;
+  }
+  hideError();
+  loadData();
+}
+
+function togglePrivacy() {
+  privacyOn = !privacyOn;
+  document.getElementById('sb-clients').classList.toggle('privacy-on', privacyOn);
+  document.getElementById('privacy-btn').textContent = privacyOn ? '🔒' : '👁';
+  document.getElementById('privacy-btn').title = privacyOn ? 'Tampilkan nama klien' : 'Sembunyikan nama klien';
+}
+
+// ══════════════════════════════════════════════════════
+// LOGIN
+// ══════════════════════════════════════════════════════
+function showLoginFor(c) {
+  document.getElementById('lc-name').textContent = c.full || c.name;
+  document.getElementById('login-screen').classList.add('show');
+  document.getElementById('loading-screen').style.display = 'none';
+}
+function doLogin() {
+  const pw = document.getElementById('lc-pw').value;
+  if (pw === currentClient.password) {
+    sessionStorage.setItem('auth_' + currentClient.id, pw);
+    document.getElementById('login-screen').classList.remove('show');
+    document.getElementById('lc-err').style.display = 'none';
+    showMain(true); loadData();
+  } else {
+    document.getElementById('lc-err').style.display = 'block';
+    document.getElementById('lc-pw').value = '';
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// DATA — JSONP via Google Visualization API
+// ══════════════════════════════════════════════════════
+function loadData() {
+  showMain(false);
+  hideError();
+  const { sheetId, sheetName } = currentClient;
+  const cb  = '__gviz_' + Date.now();
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=responseHandler:${cb}&sheet=${encodeURIComponent(sheetName)}`;
+
+  const timer = setTimeout(() => { cleanup(); showMain(true); showError('Timeout — pastikan sheet sudah dipublikasikan atau bisa diakses siapa saja.'); }, 15000);
+  const cleanup = () => { delete window[cb]; document.getElementById('_gviz')?.remove(); };
+
+  window[cb] = raw => {
+    clearTimeout(timer); cleanup();
+    try {
+      allData = parseGviz(raw).map(normalizeRow).filter(r => r.title && r.title !== '—');
+      filteredData = [...allData];
+      buildFilters();
+      renderAll();
+      document.getElementById('tb-sync').textContent = '✓ Synced ' + new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+      showMain(true);
+      setTimeout(loadData, 5 * 60000);
+    } catch(e) { showMain(true); showError('Error: ' + e.message); }
+  };
+
+  const s = Object.assign(document.createElement('script'), { id:'_gviz', src:url });
+  s.onerror = () => { clearTimeout(timer); cleanup(); showMain(true); showError('Gagal memuat data.'); };
+  document.head.appendChild(s);
+}
+
+function parseGviz(raw) {
+  const cols = raw.table.cols.map(c => c.label.trim());
+  return (raw.table.rows || []).map(row => {
+    const obj = {};
+    cols.forEach((h,i) => { const c = row.c?.[i]; obj[h] = c?.v != null ? c.v : ''; });
+    return obj;
+  });
+}
+
+const str = v => String(v == null ? '' : v).trim();
+
+function normalizeRow(r) {
+  const status       = str(r['status']).toLowerCase();
+  const totalScore   = parseFloat(r['totalScore']) || 0;
+  const reviewsCount = parseInt(r['reviewsCount']) || 0;
+  const waExist      = !status.includes('no whatsapp');
+
+  // AI Priority Score (0–100): rating 30% + reviews 15% + WA 25% + pipeline stage 30%
+  const stageScores  = { 'no whatsapp':0, 'new lead':10, 'contacted':16, 'response received':20, 'hot lead':28, 'invoice sent':30, 'won':30, 'lost':0 };
+  const priorityScore = Math.round(Math.min(100,
+    (totalScore / 5) * 30 +
+    Math.min(Math.log10(reviewsCount + 1) / Math.log10(201), 1) * 15 +
+    (waExist ? 25 : 0) +
+    (stageScores[status] ?? 5)
+  ));
+
+  return {
+    title:          str(r['title'])        || '—',
+    totalScore, reviewsCount, priorityScore,
+    city:           str(r['city']),
+    province:       str(r['Province']),
+    phone:          str(r['phone']),
+    waExist,
+    categoryName:   str(r['categoryName']) || 'Lainnya',
+    url:            str(r['url']),
+    status,
+    note:           str(r['Note']),
+    potentialValue: parseMoney(r['potential value']),
+    wonValue:       parseMoney(r['won value']),
+    lastContactDate: parseDate(r['last contact date']),
+  };
+}
+const parseMoney = v => parseFloat(String(v||'').replace(/[^0-9.]/g,'')) || 0;
+const parseDate  = v => { if(!v||!String(v).trim()) return null; const d=new Date(String(v).trim()); return isNaN(d)?null:d; };
+
+// ══════════════════════════════════════════════════════
+// RENDER ALL
+// ══════════════════════════════════════════════════════
+function renderAll() {
+  destroyCharts();
+  renderOverview();
+  renderWAInsights();
+  renderBenchmarks(allData);
+  renderCategory(allData);
+  renderPriorityLeads(allData);
+  renderPipeline();
+  renderGeographic();
+  renderLeads();
+  // Force resize after DOM paint so charts in newly rendered rows get correct dimensions
+  setTimeout(() => Object.values(charts).forEach(c => { try { c.resize(); } catch(e) {} }), 80);
+}
+
+// ── OVERVIEW ──────────────────────────────────────────
+function renderOverview() {
+  const d = allData;
+  const total     = d.length;
+  const waCount   = d.filter(hasWA).length;
+  const contacted = d.filter(isContacted).length;
+  const responded = d.filter(isResponded).length;
+  const hot       = d.filter(isHot).length;
+  const won       = d.filter(isWon).length;
+  const noWA      = d.filter(isNoWA).length;
+  const rRate     = contacted > 0 ? ((responded/contacted)*100).toFixed(1) : '0.0';
+
+  document.getElementById('kpi-overview').innerHTML = [
+    { label:'Total Leads Scraped',  val: total.toLocaleString(),     sub:`${noWA} tanpa WA · ${waCount} punya WA`, cls:'' },
+    { label:'Berhasil Dikontak',    val: contacted.toLocaleString(), sub:`contacted + responded + hot leads`,       cls:'blue' },
+    { label:'Yang Merespons',       val: responded.toLocaleString(), sub:`response received + hot leads (${rRate}%)`, cls:'purple' },
+    { label:'🔥 Hot Leads',         val: hot.toLocaleString(),        sub:'siap follow-up sales lapangan',          cls:'orange' },
+    { label:'✅ Deal Menang',        val: won.toLocaleString(),        sub:won===0?'Belum ada konversi':'konversi berhasil', cls:'green' },
+  ].map(c=>`<div class="kpi-card ${c.cls}">
+    <div class="kpi-label">${c.label}</div>
+    <div class="kpi-val">${c.val}</div>
+    <div class="kpi-sub">${c.sub}</div>
+  </div>`).join('');
+
+  // Insights
+  const cities    = new Set(d.filter(r=>r.city).map(r=>r.city)).size;
+  const topHot    = (() => { const m={}; d.filter(isHot).forEach(r=>{if(r.city)m[r.city]=(m[r.city]||0)+1;}); return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]).join(', ')||'—'; })();
+  const overdue   = d.filter(r => { if(isWon(r)||isLost(r)||isNewLead(r)||isNoWA(r)) return false; return r.lastContactDate && (Date.now()-r.lastContactDate)/864e5 > 7; }).length;
+  const newLeads  = d.filter(isNewLead).length;
+  const rNum      = parseFloat(rRate);
+
+  document.getElementById('insights-card').innerHTML = `
+    <div class="insights-header">
+      <div class="insights-icon">📈</div>
+      <div>
+        <div class="insights-title">Ringkasan Kampanye & Prioritas Taktis</div>
+        <div class="insights-subtitle">Analisis otomatis berdasarkan data kampanye terkini · ${new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}</div>
+      </div>
+    </div>
+    <div class="insights-cols">
+      <div class="insights-col">
+        <h4>Yang Sudah Dicapai <span class="ic-tag ic-green">Progress</span></h4>
+        <ul>
+          <li>Berhasil scraping & memproses <strong>${total.toLocaleString()}</strong> data bisnis di <strong>${cities}</strong> kota</li>
+          <li><strong>${waCount.toLocaleString()}</strong> lead punya nomor WA aktif <em>(${((waCount/total)*100).toFixed(0)}% dari total)</em></li>
+          <li>Berhasil mengontak <strong>${contacted.toLocaleString()}</strong> bisnis via WA Broadcast</li>
+          <li>Response rate <strong>${rRate}%</strong> — standar cold WA B2B biasanya 1–5%, ini ${rNum > 5 ? '✓ di atas rata-rata' : rNum >= 2 ? '✓ normal' : 'masih bisa ditingkatkan'}</li>
+          <li><strong>${hot}</strong> hot leads teridentifikasi di: <strong>${topHot}</strong></li>
+          ${overdue > 0
+            ? `<li>⚠ <strong>${overdue}</strong> leads yang dikontak belum di-follow-up >7 hari</li>`
+            : `<li>✓ Semua leads yang sudah dikontak ter-follow-up dalam 7 hari</li>`}
+          <li><strong>${newLeads.toLocaleString()}</strong> New Leads masih menunggu broadcast WA berikutnya</li>
+        </ul>
+      </div>
+      <div class="insights-col">
+        <h4>Prioritas Taktis Minggu Ini <span class="ic-tag ic-orange">Segera</span></h4>
+        <ul>
+          <li>Follow-up langsung ke <strong>${hot} hot leads</strong> oleh sales lapangan — peluang closing terdekat</li>
+          <li>Re-broadcast leads <strong>"Contacted"</strong> dengan angle baru: testimoni proyek nyata, sebelum/sesudah</li>
+          ${overdue > 0 ? `<li>⚡ Segera kontak <strong>${overdue} leads overdue</strong> sebelum interest mendingin</li>` : ''}
+          <li>${rNum < 3 ? 'Uji variasi pesan WA: tambahkan nama bisnis + pain point spesifik untuk tingkatkan response rate' : 'Pertahankan tone pesan saat ini — response rate sudah kompetitif'}</li>
+        </ul>
+        <div style="margin-top:10px;padding:8px 10px;background:var(--s2);border-radius:6px;font-size:10px;color:var(--muted);border-left:3px solid var(--gm);">
+          📌 Strategi jangka menengah (6 poin evaluasi) tersedia di bagian <strong>Rekomendasi Strategis</strong> di bawah.
+        </div>
+      </div>
+    </div>`;
+
+  // Status chart — cumulative funnel counts (matching KPI cards exactly)
+  const statusMap = {};
+  d.forEach(r => { const k=r.status||'unknown'; statusMap[k]=(statusMap[k]||0)+1; });
+
+  // Each stage shows total leads that reached AT LEAST that stage (same as KPI definitions)
+  const cumMap = {
+    'no whatsapp':       statusMap['no whatsapp'] || 0,
+    'new lead':          statusMap['new lead']     || 0,
+    'contacted':         d.filter(isContacted).length,  // 775 = contacted+response+hot+...
+    'response received': d.filter(isResponded).length,  // 149 = response+hot+...
+    'hot lead':          d.filter(isHot).length,        // 35
+    'invoice sent':      d.filter(isInvoiced).length,
+    'won':               d.filter(isWon).length,
+    'lost':              statusMap['lost'] || 0,
+  };
+  const chartLabel = {
+    'no whatsapp':'No WhatsApp', 'new lead':'New Lead',
+    'contacted':'Berhasil Dikontak', 'response received':'Yang Merespons',
+    'hot lead':'Hot Lead', 'invoice sent':'Invoice Sent', 'won':'Won', 'lost':'Lost',
+  };
+  const entries = pipelineOrder.map(k => [chartLabel[k]||capStatus(k), cumMap[k]||0]).filter(e=>e[1]>0);
+  const colors  = ['#555555','#34d399','#818cf8','#4f8ef7','#ff8a10','#f59e0b','#34d399','#f87171'];
+
+  charts.status = new Chart(document.getElementById('ch-status'), {
+    type:'bar',
+    data:{ labels:entries.map(e=>e[0]), datasets:[{ data:entries.map(e=>e[1]), backgroundColor:colors.slice(0,entries.length), borderRadius:5, borderSkipped:false }] },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw.toLocaleString()} leads`}}},
+      scales:{ x:{grid:{color:'#2e2e38'},ticks:{color:'#7a7a8e',callback:v=>v.toLocaleString()}}, y:{grid:{display:false},ticks:{color:'#7a7a8e'}} }
+    }
+  });
+  document.getElementById('desc-status').textContent =
+    `Funnel kumulatif: setiap tahap menunjukkan jumlah lead yang telah mencapai tahap tersebut atau lebih jauh. ` +
+    `"Berhasil Dikontak" (${contacted.toLocaleString()}) dan "Yang Merespons" (${responded.toLocaleString()}) ` +
+    `sama persis dengan angka KPI di atas.`;
+
+  // Score chart
+  const bkts   = [[0,1,'Tanpa Rating'],[1,3,'1–3 ★'],[3,4,'3–4 ★'],[4,5,'4–5 ★']];
+  const bcounts = bkts.map(([lo,hi]) => lo===0 ? d.filter(r=>r.totalScore===0).length : d.filter(r=>r.totalScore>=lo&&r.totalScore<hi).length);
+  bcounts[3] = d.filter(r=>r.totalScore>=4&&r.totalScore<=5).length;
+
+  charts.score = new Chart(document.getElementById('ch-score'), {
+    type:'bar',
+    data:{ labels:bkts.map(b=>b[2]), datasets:[{ data:bcounts, backgroundColor:['#3a3a44','#4f8ef755','#4f8ef7aa','#4f8ef7'], borderRadius:5, borderSkipped:false }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw} leads`}}},
+      scales:{ x:{grid:{display:false},ticks:{color:'#7a7a8e'}}, y:{grid:{color:'#2e2e38'},ticks:{color:'#7a7a8e'}} }
+    }
+  });
+  document.getElementById('desc-score').textContent =
+    `${bcounts[3]} leads (${((bcounts[3]/total)*100).toFixed(0)}%) memiliki rating 4–5 bintang di Google Maps — indikator bisnis yang aktif dan terpercaya. Data berkualitas tinggi ini meningkatkan peluang konversi.`;
+}
+
+// ── WA INSIGHTS ───────────────────────────────────────
+function renderWAInsights() {
+  const el = document.getElementById('wa-insights-card');
+  if (!el) return;
+  const w = WA_INSIGHTS;
+  el.innerHTML = `
+    <div class="wa-card-hdr">
+      <div class="wa-card-icon">💬</div>
+      <div>
+        <div class="wa-card-title">Insight AI dari Interaksi WhatsApp — Fira CS Agent</div>
+        <div class="wa-card-sub">Analisis pola dari ratusan interaksi selama 2 bulan terakhir · Diperbarui ${w.updated}</div>
+      </div>
+    </div>
+    <div class="wa-grid">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px">⚠ Hambatan Konversi yang Teridentifikasi</div>
+        <div class="wa-pains">
+          ${w.painPoints.map(p => `
+            <div class="wa-pain">
+              <div class="wa-pain-title">${p.emoji} ${p.title}</div>
+              <div class="wa-pain-desc">${p.desc}</div>
+              ${p.quotes.map(q => `<div class="wa-quote">${esc(q)}</div>`).join('')}
+            </div>`).join('')}
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px">✅ Rekomendasi Strategis Jangka Menengah</div>
+        <div class="wa-actions">
+          ${w.actions.map((a, i) => `
+            <div class="wa-action">
+              <div class="wa-action-num">${i + 1}</div>
+              <div class="wa-action-body">
+                <div class="wa-action-title">${a.title}</div>
+                <div class="wa-action-desc">${a.desc}</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── PIPELINE ──────────────────────────────────────────
+function renderPipeline() {
+  const d = allData;
+  const total     = d.length;
+  const waCount   = d.filter(hasWA).length;
+  const contacted = d.filter(isContacted).length;
+  const responded = d.filter(isResponded).length;
+  const hot       = d.filter(isHot).length;
+  const won       = d.filter(isWon).length;
+
+  document.getElementById('pipeline-stats').innerHTML = [
+    { val:total.toLocaleString(),      label:'Total Scraped', color:'#7a7a8e' },
+    { val:waCount.toLocaleString(),    label:'Punya WA',      color:'#25d366' },
+    { val:contacted.toLocaleString(),  label:'Dikontak',      color:'var(--d7)' },
+    { val:responded.toLocaleString(),  label:'Merespons',     color:'var(--d1)' },
+    { val:hot.toLocaleString(),        label:'🔥 Hot Lead',   color:'var(--go)' },
+  ].map(s=>`<div class="stat-box"><div class="stat-val" style="color:${s.color}">${s.val}</div><div class="stat-label">${s.label}</div></div>`).join('');
+
+  // Funnel visual (custom HTML bars, more professional than chart.js)
+  const steps = [
+    { label:'Data Scraped',     n:total,     color:'#555' },
+    { label:'Nomor WA Aktif',   n:waCount,   color:'#25d366' },
+    { label:'Berhasil Dikontak',n:contacted, color:'var(--d7)' },
+    { label:'Memberi Respons',  n:responded, color:'var(--d1)' },
+    { label:'Hot Lead',         n:hot,       color:'var(--go)' },
+    { label:'Won (Konversi)',    n:won,       color:'var(--d3)' },
+  ];
+  const max = total || 1;
+  document.getElementById('funnel-visual').innerHTML = steps.map(s => `
+    <div class="funnel-row">
+      <div class="funnel-label">${s.label}</div>
+      <div class="funnel-bar-wrap">
+        <div class="funnel-bar" style="width:${(s.n/max*100).toFixed(1)}%;background:${s.color}">
+          <span class="funnel-bar-text">${s.n.toLocaleString()}</span>
+        </div>
+      </div>
+      <div class="funnel-pct">${((s.n/total)*100).toFixed(1)}%</div>
+    </div>`).join('');
+
+  const rRate = contacted > 0 ? ((responded/contacted)*100).toFixed(1) : '0';
+  document.getElementById('desc-funnel').textContent =
+    `Dari ${total.toLocaleString()} data hasil scraping, ${waCount.toLocaleString()} memiliki nomor WA aktif. Kampanye broadcast berhasil menjangkau ${contacted.toLocaleString()} bisnis, dengan ${responded} respons (${rRate}% response rate) dan ${hot} hot leads teridentifikasi.`;
+
+  // WA donut
+  const noWA = d.filter(isNoWA).length;
+  charts.wa = new Chart(document.getElementById('ch-wa'), {
+    type:'doughnut',
+    data:{ labels:['WA Aktif','Tanpa WA'], datasets:[{ data:[waCount, noWA], backgroundColor:['#25d366','#3a3a44'], borderWidth:2, borderColor:'#1e1e23' }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'65%',
+      plugins:{ legend:{ position:'bottom', labels:{ color:'#7a7a8e', boxWidth:10, padding:12 } },
+        tooltip:{ callbacks:{ label:c=>` ${c.raw} (${((c.raw/total)*100).toFixed(1)}%)` } }
+      }
+    }
+  });
+  document.getElementById('desc-wa').textContent =
+    `${waCount.toLocaleString()} leads (${((waCount/total)*100).toFixed(0)}%) memiliki nomor WhatsApp aktif dan dapat dikontak. ${noWA} leads tidak bisa dijangkau via WA.`;
+
+  // Hot leads list
+  const hotLeads = d.filter(isHot).sort((a,b) => (b.totalScore||0)-(a.totalScore||0));
+  document.getElementById('hot-count').textContent = hotLeads.length;
+  document.getElementById('hot-list').innerHTML = hotLeads.length === 0
+    ? '<div class="empty-state">Belum ada hot leads teridentifikasi.</div>'
+    : hotLeads.slice(0,8).map(r => `
+      <div class="alert-item" style="border-left-color:var(--go);border-color:#f59e0b33">
+        <div>
+          <div class="alert-name">${esc(r.title)}</div>
+          <div class="alert-meta">${esc(r.city)} · Rating ${r.totalScore||'—'} · <span class="badge ${badgeCls(r.status)}">${capStatus(r.status)}</span>${r.waExist?' · <span style="color:#25d366;font-size:10px">WA ✓</span>':''}</div>
+        </div>
+        <span class="badge b-hot">🔥 HOT</span>
+      </div>`).join('');
+
+  // Overdue alerts
+  const today = Date.now();
+  const overdue = d.filter(r => {
+    if (isWon(r)||isLost(r)||isNewLead(r)||isNoWA(r)) return false;
+    return r.lastContactDate && (today-r.lastContactDate)/864e5 > 7;
+  }).sort((a,b)=>(today-b.lastContactDate)-(today-a.lastContactDate));
+  document.getElementById('alert-count').textContent = overdue.length;
+  document.getElementById('alert-list').innerHTML = overdue.length === 0
+    ? '<div class="empty-state">✓ Semua leads aktif sudah dikontak dalam 7 hari terakhir.</div>'
+    : overdue.slice(0,6).map(r => {
+        const days = Math.floor((today-r.lastContactDate)/864e5);
+        return `<div class="alert-item">
+          <div>
+            <div class="alert-name">${esc(r.title)}</div>
+            <div class="alert-meta">${esc(r.city)} · <span class="badge ${badgeCls(r.status)}">${capStatus(r.status)}</span>${r.waExist?' · WA ✓':''}</div>
+          </div>
+          <span class="alert-days">${days} hari lalu</span>
+        </div>`;
+      }).join('');
+}
+
+// ── GEOGRAPHIC ────────────────────────────────────────
+function renderGeographic() {
+  const d = allData;
+  const total = d.length;
+
+  // City chart
+  const cm = {}; d.forEach(r=>{if(r.city) cm[r.city]=(cm[r.city]||0)+1;});
+  const topC = Object.entries(cm).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  charts.city = new Chart(document.getElementById('ch-city'), {
+    type:'bar',
+    data:{ labels:topC.map(e=>e[0]), datasets:[{ data:topC.map(e=>e[1]), backgroundColor:'#4f8ef7cc', borderRadius:4, borderSkipped:false }] },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw} leads`}}},
+      scales:{ x:{grid:{color:'#2e2e38'},ticks:{color:'#7a7a8e'}}, y:{grid:{display:false},ticks:{color:'#7a7a8e'}} }
+    }
+  });
+  const topCityName = topC[0]?.[0] || '—';
+  document.getElementById('desc-city').textContent =
+    `${topCityName} mendominasi dengan ${topC[0]?.[1]||0} leads, diikuti ${topC[1]?.[0]||'—'} (${topC[1]?.[1]||0}) dan ${topC[2]?.[0]||'—'} (${topC[2]?.[1]||0}). Total cakupan ${Object.keys(cm).length} kota berbeda.`;
+
+  // Province donut
+  const pm = {}; d.forEach(r=>{const k=r.province||r.city||'Lainnya'; pm[k]=(pm[k]||0)+1;});
+  const topP = Object.entries(pm).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const pal8 = ['#4f8ef7','#a78bfa','#34d399','#f59e0b','#f87171','#60a5fa','#818cf8','#fbbf24'];
+  charts.prov = new Chart(document.getElementById('ch-prov'), {
+    type:'doughnut',
+    data:{ labels:topP.map(e=>e[0]), datasets:[{ data:topP.map(e=>e[1]), backgroundColor:pal8, borderWidth:2, borderColor:'#1e1e23' }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'50%',
+      plugins:{ legend:{ position:'right', labels:{ color:'#7a7a8e', boxWidth:8, padding:8, font:{size:10} } } }
+    }
+  });
+  document.getElementById('desc-prov').textContent =
+    `Kampanye mencakup ${Object.keys(pm).length} provinsi. ${topP[0]?.[0]||'—'} dan ${topP[1]?.[0]||'—'} adalah dua provinsi dengan konsentrasi lead terbanyak.`;
+
+  // Hot leads per city
+  const hm = {}; d.filter(isHot).forEach(r=>{if(r.city) hm[r.city]=(hm[r.city]||0)+1;});
+  const topH = Object.entries(hm).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  if (topH.length > 0) {
+    charts.hotCity = new Chart(document.getElementById('ch-hot-city'), {
+      type:'bar',
+      data:{ labels:topH.map(e=>e[0]), datasets:[{ data:topH.map(e=>e[1]), backgroundColor:'#ff8a10cc', borderRadius:4, borderSkipped:false }] },
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw} hot leads`}}},
+        scales:{ x:{grid:{display:false},ticks:{color:'#7a7a8e'}}, y:{grid:{color:'#2e2e38'},ticks:{color:'#7a7a8e',stepSize:1}} }
+      }
+    });
+    document.getElementById('desc-hot-city').textContent =
+      `${topH[0]?.[0]||'—'} memiliki hot lead terbanyak (${topH[0]?.[1]||0}). Kota-kota ini harus diprioritaskan untuk kunjungan sales lapangan.`;
+  } else {
+    document.getElementById('ch-hot-city').parentElement.innerHTML = '<div class="ct-title">🔥 Hot Leads per Kota</div><div class="empty-state" style="padding:20px">Belum ada hot leads teridentifikasi.</div>';
+  }
+
+  // Response rate per city (top 6 cities by lead count)
+  const topCities6 = topC.slice(0,6).map(e => e[0]);
+  const cityContacted = {}, cityResponded = {};
+  d.filter(r=>topCities6.includes(r.city)).forEach(r => {
+    if (!cityContacted[r.city]) cityContacted[r.city] = 0;
+    if (!cityResponded[r.city]) cityResponded[r.city] = 0;
+    if (isContacted(r)) cityContacted[r.city]++;
+    if (isResponded(r)) cityResponded[r.city]++;
+  });
+  const rRates = topCities6.map(c => cityContacted[c] > 0 ? +((cityResponded[c]/cityContacted[c])*100).toFixed(1) : 0);
+  charts.respCity = new Chart(document.getElementById('ch-resp-city'), {
+    type:'bar',
+    data:{ labels:topCities6, datasets:[{ data:rRates, backgroundColor:'#a78bfacc', borderRadius:4, borderSkipped:false }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw}% response rate`}}},
+      scales:{ x:{grid:{display:false},ticks:{color:'#7a7a8e',font:{size:10}}}, y:{grid:{color:'#2e2e38'},ticks:{color:'#7a7a8e',callback:v=>v+'%'}} }
+    }
+  });
+  const bestCity = topCities6[rRates.indexOf(Math.max(...rRates))] || '—';
+  const bestRate = Math.max(...rRates);
+  document.getElementById('desc-response-city').textContent =
+    `${bestCity} memiliki response rate tertinggi (${bestRate}%). Kota dengan response rate tinggi mengindikasikan pasar yang lebih reseptif terhadap produk FIRA.`;
+}
+
+// ── LEADS TABLE ───────────────────────────────────────
+function buildFilters() {
+  const statuses   = [...new Set(allData.map(r=>r.status).filter(Boolean))].sort((a,b)=>pipelineOrder.indexOf(a)-pipelineOrder.indexOf(b));
+  const cities     = [...new Set(allData.map(r=>r.city).filter(Boolean))].sort();
+  const categories = [...new Set(allData.map(r=>r.categoryName).filter(Boolean))].sort();
+  document.getElementById('f-status').innerHTML   = '<option value="">Semua Status</option>'   + statuses.map(s=>`<option value="${s}">${capStatus(s)}</option>`).join('');
+  document.getElementById('f-city').innerHTML     = '<option value="">Semua Kota</option>'     + cities.map(c=>`<option>${c}</option>`).join('');
+  document.getElementById('f-category').innerHTML = '<option value="">Semua Kategori</option>' + categories.map(c=>`<option>${esc(c)}</option>`).join('');
+}
+
+function applyFilters() {
+  const sv = document.getElementById('f-status').value;
+  const cv = document.getElementById('f-city').value.toLowerCase();
+  const catv = document.getElementById('f-category').value.toLowerCase();
+  const wv = document.getElementById('f-wa').value;
+  const q  = document.getElementById('f-search').value.toLowerCase();
+  filteredData = allData.filter(r => {
+    if (sv   && r.status !== sv) return false;
+    if (cv   && r.city.toLowerCase() !== cv) return false;
+    if (catv && r.categoryName.toLowerCase() !== catv) return false;
+    if (wv === 'yes' && !r.waExist) return false;
+    if (wv === 'no'  &&  r.waExist) return false;
+    if (q  && !r.title.toLowerCase().includes(q) && !r.city.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  currentPage = 0;
+  renderLeads();
+}
+
+function resetFilters() {
+  ['f-status','f-city','f-category','f-wa'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-search').value = '';
+  filteredData = [...allData];
+  currentPage = 0;
+  renderLeads();
+}
+
+function sortBy(key) { if(sortKey===key) sortDir*=-1; else { sortKey=key; sortDir=1; } renderLeads(); }
+function changePage(d) { currentPage+=d; renderLeads(); }
+
+function renderLeads() {
+  const sorted = [...filteredData].sort((a,b) => {
+    let av=a[sortKey], bv=b[sortKey];
+    if (sortKey === 'status') { av=pipelineOrder.indexOf(av); bv=pipelineOrder.indexOf(bv); }
+    if (typeof av==='string') av=av.toLowerCase();
+    if (typeof bv==='string') bv=bv.toLowerCase();
+    if (av==null) return 1; if (bv==null) return -1;
+    return av<bv?-sortDir:av>bv?sortDir:0;
+  });
+  const total  = sorted.length;
+  const pages  = Math.max(1, Math.ceil(total/ROWS));
+  currentPage  = Math.min(currentPage, pages-1);
+  const start  = currentPage * ROWS;
+  const slice  = sorted.slice(start, start+ROWS);
+
+  document.getElementById('leads-tbody').innerHTML = slice.map(r => {
+    const stars  = r.totalScore>0 ? '★'.repeat(Math.round(r.totalScore))+'☆'.repeat(5-Math.round(r.totalScore)) : '—';
+    const lc     = r.lastContactDate ? r.lastContactDate.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+    const name   = r.url ? `<a class="td-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>` : esc(r.title);
+    const psCls  = r.priorityScore >= 70 ? 'ps-high' : r.priorityScore >= 40 ? 'ps-mid' : 'ps-low';
+    return `<tr>
+      <td class="td-name">${name}</td>
+      <td class="td-m" style="font-size:11px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.categoryName||'—')}</td>
+      <td class="td-m">${esc(r.city||'—')}</td>
+      <td><span class="stars" style="font-size:10px">${stars}</span><span style="font-size:9px;color:var(--muted);margin-left:3px">${r.totalScore||''}</span></td>
+      <td style="text-align:center"><span class="ps-badge ${psCls}" title="Skor AI: ${r.priorityScore}/100">${r.priorityScore}</span></td>
+      <td><span class="badge ${r.waExist?'b-wa-y':'b-wa-n'}">${r.waExist?'WA ✓':'–'}</span></td>
+      <td><span class="badge ${badgeCls(r.status)}">${capStatus(r.status)}</span></td>
+      <td class="td-m">${lc}</td>
+      <td class="td-m" style="max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.note)}">${esc(r.note||'—')}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('f-count').textContent    = `${total} leads`;
+  document.getElementById('pg-info').textContent     = `${start+1}–${Math.min(start+ROWS,total)} dari ${total}`;
+  document.getElementById('pg-prev').disabled        = currentPage === 0;
+  document.getElementById('pg-next').disabled        = currentPage >= pages-1;
+}
+
+// ── BENCHMARK PANEL ───────────────────────────────────
+function renderBenchmarks(d) {
+  const total     = d.length;
+  const waCount   = d.filter(hasWA).length;
+  const contacted = d.filter(isContacted).length;
+  const responded = d.filter(isResponded).length;
+  const hot       = d.filter(isHot).length;
+
+  const rRate  = contacted > 0 ? +((responded / contacted) * 100).toFixed(1) : 0;
+  const waPct  = total > 0     ? +((waCount / total) * 100).toFixed(1) : 0;
+  const hotPct = responded > 0 ? +((hot / responded) * 100).toFixed(1) : 0;
+
+  const metrics = [
+    {
+      name: 'Response Rate',
+      desc: 'Dari leads yang dikontak via WA, berapa % yang membalas',
+      industry: '3–5%',
+      yours: rRate + '%',
+      yoursLarge: true,
+      verdict: rRate >= 8 ? { cls:'vd-win', text:'🏆 Jauh di atas rata-rata industri' }
+             : rRate >= 5 ? { cls:'vd-win', text:'✓ Di atas standar industri' }
+             : rRate >= 3 ? { cls:'vd-ok',  text:'✓ Sesuai standar' }
+             :              { cls:'vd-lag',  text:'↓ Perlu peningkatan' }
+    },
+    {
+      name: 'WA Coverage',
+      desc: '% dari total leads yang bisa dihubungi via WhatsApp',
+      industry: '50–65%',
+      yours: waPct + '%',
+      yoursLarge: true,
+      verdict: waPct >= 65 ? { cls:'vd-win', text:'✓ Di atas rata-rata' }
+             : waPct >= 50 ? { cls:'vd-ok',  text:'✓ Sesuai standar' }
+             :               { cls:'vd-lag',  text:'↓ WA coverage rendah' }
+    },
+    {
+      name: 'Hot Lead Rate',
+      desc: '% dari yang merespons yang masuk kualifikasi hot lead',
+      industry: '15–25%',
+      yours: hotPct + '%',
+      yoursLarge: true,
+      verdict: hotPct >= 25 ? { cls:'vd-win', text:'🏆 Di atas standar industri' }
+             : hotPct >= 15 ? { cls:'vd-ok',  text:'✓ Sesuai standar' }
+             :                { cls:'vd-lag',  text:'↓ Kualifikasi perlu ditingkatkan' }
+    },
+  ];
+
+  document.getElementById('bench-panel').innerHTML = `
+    <div class="bench-head">
+      <div class="bench-icon">📊</div>
+      <div>
+        <div class="bench-htitle">Perbandingan dengan Standar Industri</div>
+        <div class="bench-hsub">Benchmark cold outreach B2B Indonesia — data industri digital marketing 2024</div>
+      </div>
+    </div>
+    <div class="bench-grid">
+      ${metrics.map(m => `
+        <div class="bench-card">
+          <div class="bench-name">${m.name}</div>
+          <div class="bench-card-desc">${m.desc}</div>
+          <div class="bench-compare">
+            <div class="bench-row">
+              <span class="bench-lbl">Industri B2B</span>
+              <span class="bench-num" style="color:var(--muted)">${m.industry}</span>
+            </div>
+            <div class="bench-divider"></div>
+            <div class="bench-row">
+              <span class="bench-lbl">Kampanye ini</span>
+              <span class="bench-num bench-big">${m.yours}</span>
+            </div>
+          </div>
+          <div class="bench-verdict ${m.verdict.cls}">${m.verdict.text}</div>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+// ── CATEGORY CHART ────────────────────────────────────
+function renderCategory(d) {
+  const total = d.length;
+  const cm = {};
+  d.forEach(r => { const k = r.categoryName || 'Lainnya'; cm[k] = (cm[k]||0)+1; });
+  const top = Object.entries(cm).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const pal = ['#4f8ef7','#a78bfa','#34d399','#f59e0b','#f87171','#60a5fa','#818cf8','#fbbf24','#6ee7b7','#fca5a5'];
+
+  charts.category = new Chart(document.getElementById('ch-category'), {
+    type: 'bar',
+    data: {
+      labels: top.map(e=>e[0]),
+      datasets: [{ data:top.map(e=>e[1]), backgroundColor:pal.slice(0,top.length), borderRadius:4, borderSkipped:false }]
+    },
+    options: {
+      indexAxis: 'y', responsive:true, maintainAspectRatio:false,
+      plugins: { legend:{display:false}, tooltip:{callbacks:{label:c=>` ${c.raw} leads (${((c.raw/total)*100).toFixed(1)}%)`}} },
+      scales: {
+        x: { grid:{color:'#2e2e38'}, ticks:{color:'#7a7a8e'} },
+        y: { grid:{display:false}, ticks:{color:'#7a7a8e', font:{size:10}} }
+      }
+    }
+  });
+
+  const topCat = top[0]?.[0] || '—';
+  const topN   = top[0]?.[1] || 0;
+  document.getElementById('desc-category').textContent =
+    `${top.length} kategori bisnis teridentifikasi. ${topCat} mendominasi dengan ${topN} leads (${((topN/total)*100).toFixed(0)}% dari total). Klik kategori di tabel "All Leads" untuk filter spesifik.`;
+}
+
+// ── PRIORITY LEADS LIST ───────────────────────────────
+function renderPriorityLeads(d) {
+  const top = [...d].sort((a,b)=>b.priorityScore-a.priorityScore).slice(0,12);
+
+  document.getElementById('desc-priority').textContent =
+    'Skor AI 0–100: kombinasi rating Google Maps, ukuran bisnis (reviews), WA reachability, dan posisi pipeline.';
+
+  document.getElementById('priority-list').innerHTML = top.map((r, i) => {
+    const cls = r.priorityScore >= 70 ? 'ps-high' : r.priorityScore >= 40 ? 'ps-mid' : 'ps-low';
+    return `<div class="priority-row">
+      <div class="ps-badge ${cls}">${r.priorityScore}</div>
+      <div class="priority-info">
+        <div class="priority-name">${esc(r.title)}</div>
+        <div class="priority-meta">${esc(r.city)} · <span class="badge ${badgeCls(r.status)}">${capStatus(r.status)}</span></div>
+      </div>
+      <span class="priority-rank">#${i+1}</span>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// MAP
+// ══════════════════════════════════════════════════════
+const CITY_COORDS = {
+  // Jawa Timur
+  'surabaya':[-7.2575,112.7521],'malang':[-7.9797,112.6304],'sidoarjo':[-7.4559,112.7183],
+  'gresik':[-7.1566,112.6527],'mojokerto':[-7.4721,112.4337],'jombang':[-7.5466,112.2384],
+  'kediri':[-7.8481,111.9679],'blitar':[-8.0953,112.1608],'madiun':[-7.6298,111.5239],
+  'lamongan':[-7.1170,112.4153],'tuban':[-6.8980,111.9010],'bojonegoro':[-7.1506,111.8818],
+  'pasuruan':[-7.6453,112.9075],'probolinggo':[-7.7543,113.2159],'lumajang':[-8.1314,113.2231],
+  'jember':[-8.1845,113.6748],'banyuwangi':[-8.2192,114.3691],'nganjuk':[-7.6047,111.9028],
+  'ngawi':[-7.4052,111.4468],'magetan':[-7.6545,111.3285],'trenggalek':[-8.0488,111.7083],
+  'tulungagung':[-8.0664,111.9039],'pacitan':[-8.1996,111.1029],'ponorogo':[-7.8658,111.4634],
+  'situbondo':[-7.7003,114.0052],'bondowoso':[-7.9108,113.8230],'pamekasan':[-7.1558,113.4696],
+  'sumenep':[-6.9984,113.8612],'sampang':[-7.1856,113.2441],'bangkalan':[-7.0328,112.7313],
+  // Sulawesi Selatan
+  'makassar':[-5.1477,119.4327],'gowa':[-5.2882,119.4221],'maros':[-5.0036,119.5694],
+  'pangkep':[-4.8650,119.5277],'bone':[-4.7448,120.3289],'bulukumba':[-5.5543,120.1934],
+  'sinjai':[-5.1259,120.2528],'jeneponto':[-5.6778,119.7478],'takalar':[-5.4322,119.4475],
+  'bantaeng':[-5.5300,119.9619],'wajo':[-4.1561,120.0161],'soppeng':[-4.3516,119.8889],
+  'barru':[-4.4080,119.6092],'pare-pare':[-4.0135,119.6273],'palopo':[-2.9924,120.1964],
+  'luwu':[-3.0000,120.2000],'toraja':[-3.0472,119.8619],
+  // Bali
+  'denpasar':[-8.6705,115.2126],'gianyar':[-8.5362,115.3210],'karangasem':[-8.4542,115.6126],
+  'badung':[-8.7471,115.1681],'bangli':[-8.4566,115.3561],'klungkung':[-8.5398,115.4031],
+  'buleleng':[-8.1115,115.0903],'tabanan':[-8.5407,115.1231],'jembrana':[-8.3599,114.6526],
+  'kuta':[-8.7215,115.1686],'ubud':[-8.5069,115.2625],'seminyak':[-8.6908,115.1600],
+  'sanur':[-8.7068,115.2624],'nusa dua':[-8.7986,115.2268],
+  // Jakarta & Jawa Barat
+  'jakarta':[-6.2088,106.8456],'jakarta selatan':[-6.2615,106.8106],'jakarta utara':[-6.1382,106.8640],
+  'jakarta barat':[-6.1688,106.7633],'jakarta timur':[-6.2251,106.9004],'jakarta pusat':[-6.1805,106.8283],
+  'bogor':[-6.5971,106.8060],'depok':[-6.4025,106.7942],'bekasi':[-6.2349,106.9896],
+  'tangerang':[-6.1702,106.6403],'tangerang selatan':[-6.3023,106.6745],
+  'bandung':[-6.9175,107.6191],'cimahi':[-6.8721,107.5424],'cirebon':[-6.7320,108.5523],
+  'tasikmalaya':[-7.3274,108.2207],'garut':[-7.2119,107.8985],'sukabumi':[-6.9204,106.9306],
+  'karawang':[-6.3216,107.3381],'subang':[-6.5740,107.7635],'purwakarta':[-6.5564,107.4441],
+  'cianjur':[-6.8204,107.1394],'kuningan':[-6.9756,108.4759],'majalengka':[-6.8362,108.2273],
+  // Jawa Tengah
+  'semarang':[-6.9932,110.4203],'solo':[-7.5755,110.8243],'surakarta':[-7.5755,110.8243],
+  'yogyakarta':[-7.7956,110.3695],'magelang':[-7.4698,110.2177],'salatiga':[-7.3310,110.5081],
+  'kudus':[-6.8048,110.8400],'pati':[-6.7500,111.0333],'jepara':[-6.5879,110.6720],
+  'rembang':[-6.7120,111.3418],'purwokerto':[-7.4314,109.2479],'kebumen':[-7.6688,109.6512],
+  'cilacap':[-7.7307,109.0105],'tegal':[-6.8694,109.1259],'pemalang':[-6.8925,109.3756],
+  'pekalongan':[-6.8886,109.6753],'batang':[-6.9089,109.7333],'kendal':[-6.9226,110.1972],
+  'demak':[-6.8943,110.6386],'grobogan':[-7.0875,110.9159],'blora':[-6.9697,111.4141],
+  'purbalingga':[-7.3894,109.3645],'banjarnegara':[-7.3792,109.6956],'wonosobo':[-7.3625,109.9003],
+  'temanggung':[-7.3162,110.1721],'boyolali':[-7.5326,110.5990],'klaten':[-7.7058,110.6056],
+  'sukoharjo':[-7.6768,110.8357],'wonogiri':[-7.8137,110.9278],'karanganyar':[-7.6063,111.0266],
+  'sragen':[-7.4284,111.0268],'purworejo':[-7.7152,110.0167],'wonosobo':[-7.3625,109.9003],
+  // Kalimantan
+  'balikpapan':[-1.2379,116.8529],'samarinda':[-0.5022,117.1536],'bontang':[0.1373,117.5008],
+  'banjarmasin':[-3.3194,114.5900],'banjarbaru':[-3.4429,114.8312],'palangkaraya':[-2.2161,113.9135],
+  'pontianak':[-0.0263,109.3425],'singkawang':[0.9003,108.9854],'tarakan':[3.3011,117.6355],
+  'nunukan':[4.1317,117.6661],'berau':[2.1549,117.4375],'kutai':[-0.4500,117.0000],
+  // Sulawesi lainnya
+  'manado':[1.4748,124.8421],'tomohon':[1.3223,124.8352],'bitung':[1.4394,125.1977],
+  'palu':[-0.8917,119.8707],'kendari':[-3.9985,122.5127],'gorontalo':[0.5435,123.0568],
+  'mamuju':[-2.6742,118.8886],'polewali':[-3.4119,119.3389],
+  // Sumatera
+  'medan':[3.5952,98.6722],'binjai':[3.5998,98.4849],'deli serdang':[3.4172,98.7672],
+  'palembang':[-2.9761,104.7754],'prabumulih':[-3.4286,104.2411],'pekanbaru':[0.5071,101.4478],
+  'dumai':[1.6724,101.4528],'batam':[1.0456,104.0305],'tanjungpinang':[0.9180,104.4509],
+  'padang':[-0.9492,100.3543],'bukittinggi':[-0.3071,100.3696],'payakumbuh':[-0.2269,100.6342],
+  'jambi':[-1.6101,103.6131],'bengkulu':[-3.8004,102.2655],'lampung':[-5.4295,105.2610],
+  'bandar lampung':[-5.4295,105.2610],'metro':[-5.1127,105.3067],'banda aceh':[5.5483,95.3238],
+  'langsa':[4.4686,97.9682],'lhokseumawe':[5.1801,97.1350],'sibolga':[1.7423,98.7782],
+  'tebing tinggi':[3.3293,99.1622],'pematang siantar':[2.9595,99.0687],'padang sidempuan':[1.3793,99.2724],
+  // NTB & NTT
+  'mataram':[-8.5832,116.1212],'lombok':[-8.6500,116.3241],'bima':[-8.4612,118.7265],
+  'kupang':[-10.1718,123.6070],'ende':[-8.8545,121.6629],'maumere':[-8.6195,122.2167],
+  // Maluku & Papua
+  'ambon':[-3.6560,128.1900],'ternate':[0.7833,127.3667],'tidore':[0.6774,127.4000],
+  'jayapura':[-2.5916,140.6690],'sorong':[-0.8727,131.2506],'manokwari':[-0.8614,134.0619],
+  'timika':[-4.5306,136.8910],
+};
+
+function extractCoords(url) {
+  if (!url) return null;
+  const m = String(url).match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (m) return [parseFloat(m[1]), parseFloat(m[2])];
+  return null;
+}
+
+function statusColor(status) {
+  const map = {
+    'won':'#25d366','hot lead':'#ff8a10','invoice sent':'#f59e0b',
+    'response received':'#4f8ef7','contacted':'#818cf8','new lead':'#34d399',
+    'lost':'#f87171','no whatsapp':'#444',
+  };
+  return map[status] || '#555';
+}
+
+let mapInstance = null;
+
+function renderMap() {
+  if (!allData.length) return;
+  const el = document.getElementById('map-container');
+
+  if (mapInstance) { mapInstance.remove(); mapInstance = null; }
+
+  mapInstance = L.map(el, { zoomControl:true, attributionControl:true }).setView([-3.5, 118.0], 5);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+    subdomains:'abcd', maxZoom:19
+  }).addTo(mapInstance);
+
+  const cluster = L.markerClusterGroup({
+    maxClusterRadius: 50,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+  });
+
+  let exact = 0, cityFallback = 0, skipped = 0;
+
+  allData.forEach(r => {
+    let coords = extractCoords(r.url);
+    let isExact = !!coords;
+
+    if (!coords) {
+      const key = (r.city || '').toLowerCase().trim();
+      const cc  = CITY_COORDS[key];
+      if (cc) {
+        // Small jitter so city-level leads don't all stack
+        coords = [cc[0] + (Math.random()-0.5)*0.06, cc[1] + (Math.random()-0.5)*0.06];
+        cityFallback++;
+      } else {
+        skipped++;
+        return;
+      }
+    } else {
+      exact++;
+    }
+
+    const color = statusColor(r.status);
+    const m = L.circleMarker(coords, {
+      radius: isExact ? 6 : 5,
+      fillColor: color, color: color,
+      weight: 1, opacity: 0.85, fillOpacity: 0.7,
+    });
+
+    const psCls = r.priorityScore >= 70 ? '#34d399' : r.priorityScore >= 40 ? '#f59e0b' : '#7a7a8e';
+    m.bindPopup(`
+      <div style="min-width:190px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:4px;line-height:1.3">${esc(r.title)}</div>
+        <div style="font-size:11px;color:#7a7a8e;margin-bottom:8px">${esc(r.city)} · ${esc(r.categoryName)}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+          <span style="background:${color}22;color:${color};font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:4px">${capStatus(r.status)}</span>
+          ${r.waExist ? '<span style="background:#0a2a18;color:#25d366;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:4px">WA ✓</span>' : ''}
+          <span style="background:${psCls}22;color:${psCls};font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:4px">Skor ${r.priorityScore}</span>
+        </div>
+        ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener" style="font-size:10.5px;color:#4f8ef7">Lihat di Google Maps →</a>` : ''}
+      </div>`, { maxWidth:240 });
+
+    cluster.addLayer(m);
+  });
+
+  mapInstance.addLayer(cluster);
+
+  // Legend
+  const legendStatuses = [
+    { s:'no whatsapp', l:'No WA' }, { s:'new lead', l:'New Lead' }, { s:'contacted', l:'Contacted' },
+    { s:'response received', l:'Responded' }, { s:'hot lead', l:'Hot Lead' }, { s:'won', l:'Won' },
+  ];
+  document.getElementById('map-legend').innerHTML = legendStatuses.map(x =>
+    `<div class="map-legend-item"><div class="map-legend-dot" style="background:${statusColor(x.s)}"></div>${x.l}</div>`
+  ).join('');
+
+  document.getElementById('map-subtitle').textContent =
+    `${(exact+cityFallback).toLocaleString()} dari ${allData.length.toLocaleString()} leads terpetakan`;
+  document.getElementById('map-stats').innerHTML =
+    `<span class="map-stat">📍 <strong>${exact.toLocaleString()}</strong> koordinat tepat dari Google Maps</span>
+     <span class="map-stat">🏙 <strong>${cityFallback.toLocaleString()}</strong> dipetakan ke level kota</span>
+     <span class="map-stat">❓ <strong>${skipped}</strong> tidak dikenali</span>`;
+}
+
+// ══════════════════════════════════════════════════════
+// PAGE NAVIGATION
+// ══════════════════════════════════════════════════════
+function showPage(id, tab) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(tab) tab.classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+  if (id === 'map' && allData.length > 0) setTimeout(renderMap, 80);
+}
+
+// ══════════════════════════════════════════════════════
+// DOWNLOAD FULL REPORT (PDF, structured)
+// ══════════════════════════════════════════════════════
+function __unused_buildCoverHTML() {
+  const d = allData;
+  const total     = d.length;
+  const waCount   = d.filter(hasWA).length;
+  const contacted = d.filter(isContacted).length;
+  const responded = d.filter(isResponded).length;
+  const hot       = d.filter(isHot).length;
+  const rRate     = contacted > 0 ? ((responded/contacted)*100).toFixed(1) : '0';
+  const date      = new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
+  const kpis = [
+    { label:'Total Leads',   val:total.toLocaleString(),     sub:'data bisnis scraped' },
+    { label:'WA Reachable',  val:waCount.toLocaleString(),   sub:((waCount/total*100).toFixed(0))+'% dari total' },
+    { label:'Dikontak',      val:contacted.toLocaleString(), sub:'via WA Broadcast' },
+    { label:'Response Rate', val:rRate+'%',                  sub:'standar industri 3–5%' },
+    { label:'Hot Leads',     val:hot.toLocaleString(),       sub:'siap follow-up closing' },
+  ];
+  return `<div style="width:1100px;height:750px;background:linear-gradient(135deg,#ea008c 0%,#ff8a10 100%);padding:52px 60px;box-sizing:border-box;display:flex;flex-direction:column;font-family:'Segoe UI',system-ui,sans-serif">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:44px">
+      <div>
+        <div style="font-size:30px;font-weight:900;color:#fff;letter-spacing:-1px">GAUNG<span style="opacity:.6">.ai</span></div>
+        <div style="font-size:10px;color:rgba(255,255,255,.55);letter-spacing:2px;text-transform:uppercase;margin-top:2px">Analytics Dashboard</div>
+      </div>
+      <div style="text-align:right;color:rgba(255,255,255,.6);font-size:11px;line-height:1.6">
+        <div>${date}</div>
+        <div>Konfidensial — Untuk Internal</div>
+      </div>
+    </div>
+    <div style="flex:1">
+      <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.6);letter-spacing:2.5px;text-transform:uppercase;margin-bottom:10px">Laporan Kampanye Lead Generation</div>
+      <div style="font-size:48px;font-weight:900;color:#fff;line-height:1.05;margin-bottom:8px">${currentClient.full || currentClient.name}</div>
+      <div style="font-size:17px;color:rgba(255,255,255,.65);margin-bottom:44px">Kampanye Prospecting & Lead Generation via WhatsApp Broadcast</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px">
+        ${kpis.map(k=>`<div style="background:rgba(255,255,255,.15);border-radius:12px;padding:18px 16px;border:1px solid rgba(255,255,255,.2)">
+          <div style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,.6);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">${k.label}</div>
+          <div style="font-size:28px;font-weight:900;color:#fff;line-height:1;margin-bottom:5px">${k.val}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.5)">${k.sub}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div style="padding-top:20px;border-top:1px solid rgba(255,255,255,.2);display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:11px;color:rgba(255,255,255,.45)">Dibuat oleh GAUNG.ai · gaungelevasidigital@gmail.com</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.45)">Data: ${document.getElementById('tb-sync')?.textContent || date}</div>
+    </div>
+  </div>`;
+}
+
+async function capturePage(id) {
+  const el = document.getElementById('page-' + id);
+  return html2canvas(el, { backgroundColor:'#131316', scale:1.5, useCORS:true, logging:false, scrollY:0 });
+}
+
+function addPageToPDF(pdf, canvas, pageW, pageH, addPage) {
+  if (addPage) pdf.addPage();
+  const ratio = canvas.height / canvas.width;
+  const w = pageW, h = Math.min(w * ratio, pageH);
+  pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, (pageH-h)/2, w, h);
+}
+
+async function downloadFullReport() {
+  const btn = document.querySelector('[onclick="downloadFullReport()"]');
+  const origText = btn.textContent;
+  btn.textContent = '⏳ Membuat PDF…';
+  btn.disabled = true;
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+    const A4W = 297, A4H = 210;
+    // A4 landscape: 297×210 mm → pixel canvas: 1400×990 (ratio 297/210 ≈ 1.414)
+    const PW = 1400, PH = 990;
+
+    const d = allData;
+    const total     = d.length;
+    const waCount   = d.filter(hasWA).length;
+    const contacted = d.filter(isContacted).length;
+    const responded = d.filter(isResponded).length;
+    const hot       = d.filter(isHot).length;
+    const won       = d.filter(isWon).length;
+    const noWA      = d.filter(isNoWA).length;
+    const rRate     = contacted > 0 ? ((responded/contacted)*100).toFixed(1) : '0.0';
+    const waPct     = total > 0 ? ((waCount/total)*100).toFixed(0) : '0';
+    const hotPct    = responded > 0 ? ((hot/responded)*100).toFixed(1) : '0';
+    const cities    = [...new Set(d.map(r=>r.city).filter(Boolean))];
+    const topHotCities = (() => {
+      const m={}; d.filter(isHot).forEach(r=>{if(r.city)m[r.city]=(m[r.city]||0)+1;});
+      return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]).join(', ')||'—';
+    })();
+
+    // ── Extract chart images (show each tab so charts render at full resolution) ──
+    const getImg = id => { try { return document.getElementById(id)?.toDataURL('image/png')||''; } catch(e){ return ''; } };
+    async function grabCharts(pageId, ids) {
+      showPage(pageId, document.querySelector(`[data-page="${pageId}"]`));
+      await new Promise(r => setTimeout(r, 700));
+      const out={};
+      ids.forEach(id => { out[id] = getImg(id); });
+      return out;
+    }
+    const ovI  = await grabCharts('overview',   ['ch-status','ch-score','ch-category']);
+    const piI  = await grabCharts('pipeline',   ['ch-wa']);
+    const geoI = await grabCharts('geographic', ['ch-city','ch-prov','ch-hot-city','ch-resp-city']);
+    showPage('overview', document.querySelector('[data-page="overview"]'));
+
+    // ── Render container: far LEFT to avoid viewport scroll issues ──
+    const box = document.createElement('div');
+    box.style.cssText = `position:fixed;left:-${PW+200}px;top:0;width:${PW}px;height:${PH}px;overflow:hidden;z-index:-1;`;
+    document.body.appendChild(box);
+
+    async function renderPage(html, isFirst) {
+      box.innerHTML = html;
+      await new Promise(r => setTimeout(r, 280));
+      const cv = await html2canvas(box, {
+        backgroundColor:'#131316', scale:2, useCORS:true, logging:false,
+        width:PW, height:PH, scrollX:0, scrollY:0,
+        windowWidth:PW, windowHeight:PH,
+      });
+      if (!isFirst) pdf.addPage();
+      pdf.addImage(cv.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, A4W, A4H);
+    }
+
+    // ── Style tokens ──
+    const bg='#131316', c1='#1e1e23', c2='#27272e', br='#2e2e38';
+    const gm='#ea008c', go='#ff8a10';
+    const d1='#4f8ef7', d2='#a78bfa', d3='#34d399', d4='#f59e0b', d5='#f87171';
+    const mu='#7a7a8e', tx='#f0f0f5';
+    const F = `font-family:'Segoe UI',system-ui,sans-serif;`;
+
+    // ── Layout (absolute positioning — every px is explicit, zero overflow risk) ──
+    // Page:    1400 × 990 px  (A4 landscape ratio)
+    // Header:  top:0     h:52
+    // KPI:     top:52    h:88
+    // Content: top:140   h:838  (990-140-12 bottom pad)
+    // H-pad:   44px each side → content w=1312px
+    // 2 cols, 12px gap: col=(1312-12)/2=650px; right col left=44+650+12=706px
+    const HDR=52, KPI=88, PAD=44, GAP=12;
+    const CT=HDR+KPI, CW=PW-2*PAD, CH=PH-CT-12;
+    const COL=(CW-GAP)/2, RC=PAD+COL+GAP;  // 650px cols, right at 706px
+
+    // page wrapper: strict box, no overflow
+    const pg = body => `<div style="${F}color:${tx};width:${PW}px;height:${PH}px;background:${bg};position:relative;overflow:hidden;">${body}</div>`;
+
+    // Header bar (absolute)
+    const hdr = (title, n) => `
+      <div style="position:absolute;top:0;left:0;width:${PW}px;height:${HDR}px;
+        background:${c1};border-bottom:2px solid ${gm};display:flex;align-items:center;
+        padding:0 ${PAD}px;box-sizing:border-box;justify-content:space-between;">
+        <div style="font-size:18px;font-weight:900;color:${gm};letter-spacing:-0.5px;">GAUNG<span style="color:${tx}">.ai</span></div>
+        <div style="font-size:13px;font-weight:700;color:${tx}">${title}</div>
+        <div style="font-size:11px;color:${mu}">${esc(currentClient.full)} &nbsp;·&nbsp; Hal ${n}/5</div>
+      </div>`;
+
+    // KPI strip (absolute, grid)
+    const kpiStrip = (items) => `
+      <div style="position:absolute;top:${HDR}px;left:0;width:${PW}px;height:${KPI}px;
+        display:grid;grid-template-columns:repeat(${items.length},1fr);gap:10px;
+        padding:12px ${PAD}px;box-sizing:border-box;">
+        ${items.map(k=>`
+          <div style="background:${c1};border:1px solid ${br};border-top:2px solid ${k.color};border-radius:8px;padding:10px 14px;">
+            <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:${mu};margin-bottom:3px;">${k.label}</div>
+            <div style="font-size:22px;font-weight:800;color:${k.color};line-height:1;">${k.val}</div>
+            <div style="font-size:9px;color:${mu};margin-top:2px;">${k.sub}</div>
+          </div>`).join('')}
+      </div>`;
+
+    // card(top, left, w, h, body): all coords are content-relative (top=0 → top of content area)
+    const card = (t,l,w,h,body) => `
+      <div style="position:absolute;top:${CT+t}px;left:${l}px;width:${w}px;height:${h}px;
+        background:${c1};border:1px solid ${br};border-radius:10px;
+        padding:14px 16px;box-sizing:border-box;overflow:hidden;">
+        ${body}
+      </div>`;
+
+    const ctitle = t => `<div style="font-size:11px;font-weight:700;color:${tx};margin-bottom:10px;line-height:1.3;">${t}</div>`;
+
+    // cimg: h in px — chart image with fixed pixel height
+    const cimg = (src, h) => src
+      ? `<img src="${src}" style="display:block;width:100%;height:${h}px;object-fit:contain;">`
+      : `<div style="height:${h}px;display:flex;align-items:center;justify-content:center;color:${mu};font-size:11px;">—</div>`;
+
+    // Inner chart height = card_h - border(2) - padding(28) - title(26) = card_h - 56
+    const ci = h => h - 56;
+
+    // ════════════════════════════════════════════════
+    // PAGE 1 — COVER (gradient, flex, no absolute needed)
+    // ════════════════════════════════════════════════
+    const date = new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
+    await renderPage(pg(`
+      <div style="position:absolute;inset:0;
+        background:linear-gradient(135deg,${gm} 0%,${go} 100%);
+        display:flex;flex-direction:column;padding:60px 80px;
+        justify-content:space-between;box-sizing:border-box;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:32px;font-weight:900;color:#fff;letter-spacing:-1px;">GAUNG.ai</div>
+            <div style="font-size:10px;color:rgba(255,255,255,.6);letter-spacing:2.5px;text-transform:uppercase;margin-top:3px;">Analytics Dashboard</div>
+          </div>
+          <div style="text-align:right;color:rgba(255,255,255,.7);font-size:12px;line-height:1.7;">
+            <div style="font-weight:600;">${date}</div>
+            <div>Konfidensial — Untuk Internal</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.65);margin-bottom:14px;">Laporan Kampanye Lead Generation</div>
+          <div style="font-size:64px;font-weight:900;color:#fff;line-height:.95;letter-spacing:-2px;margin-bottom:16px;">${esc(currentClient.full)}</div>
+          <div style="font-size:17px;color:rgba(255,255,255,.75);">Kampanye Prospecting &amp; Lead Generation via WhatsApp Broadcast</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;">
+          ${[
+            {label:'Total Leads',         val:total.toLocaleString(),     sub:'data bisnis scraped'},
+            {label:'WA Reachable',        val:waCount.toLocaleString(),   sub:waPct+'% dari total'},
+            {label:'Berhasil Dikontak',   val:contacted.toLocaleString(), sub:'via WA Broadcast'},
+            {label:'Response Rate',       val:rRate+'%',                  sub:'standar industri 3–5%'},
+            {label:'Hot Leads',           val:hot.toLocaleString(),       sub:'siap follow-up closing'},
+          ].map(k=>`
+            <div style="background:rgba(255,255,255,.17);border-radius:10px;padding:18px 20px;border:1px solid rgba(255,255,255,.2);">
+              <div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.65);margin-bottom:8px;">${k.label}</div>
+              <div style="font-size:34px;font-weight:900;color:#fff;line-height:1;">${k.val}</div>
+              <div style="font-size:10.5px;color:rgba(255,255,255,.55);margin-top:5px;">${k.sub}</div>
+            </div>`).join('')}
+        </div>
+        <div style="border-top:1px solid rgba(255,255,255,.2);padding-top:16px;display:flex;justify-content:space-between;">
+          <div style="font-size:11px;color:rgba(255,255,255,.5);">Dibuat oleh GAUNG.ai · gaungelevasidigital@gmail.com</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.5);">Data: ${document.getElementById('tb-sync')?.textContent||date}</div>
+        </div>
+      </div>
+    `), true);
+
+    // ════════════════════════════════════════════════
+    // PAGE 2 — OVERVIEW  (absolute layout — no overflow)
+    // Left col:  Benchmark (R1=268px top) + Status chart (R2=558px bottom)
+    // Right col: Category chart (R1 top)  + Summary (R2 bottom)
+    // ════════════════════════════════════════════════
+    const rN=parseFloat(rRate), wN=parseFloat(waPct), hN=parseFloat(hotPct);
+    const bench = [
+      { name:'Response Rate', ind:'3–5%',   yours:rRate+'%',  col:rN>=5?d3:rN>=3?d4:d5, label:rN>=5?'Jauh di atas rata-rata':'Sesuai standar' },
+      { name:'WA Coverage',   ind:'50–65%', yours:waPct+'%',  col:wN>=60?d3:wN>=50?d4:d5, label:wN>=60?'Di atas rata-rata':'Sesuai standar' },
+      { name:'Hot Lead Rate', ind:'15–25%', yours:hotPct+'%', col:hN>=25?d3:hN>=15?d4:d5, label:hN>=25?'Di atas standar':'Sesuai standar' },
+    ];
+    const R1=268, R2=CH-R1-GAP;  // 558
+    await renderPage(pg(`
+      ${hdr('Overview Kampanye', 2)}
+      ${kpiStrip([
+        {label:'Total Leads',       val:total.toLocaleString(),     sub:noWA+' tanpa WA',       color:d1},
+        {label:'WA Reachable',      val:waCount.toLocaleString(),   sub:waPct+'% dari total',   color:'#25d366'},
+        {label:'Berhasil Dikontak', val:contacted.toLocaleString(), sub:'via WA Broadcast',     color:d2},
+        {label:'Memberi Respons',   val:responded.toLocaleString(), sub:'rate '+rRate+'%',      color:d1},
+        {label:'Hot Leads',         val:hot.toLocaleString(),       sub:'siap follow-up sales', color:go},
+        {label:'Konversi (Won)',     val:won.toLocaleString(),       sub:'deal ditutup',         color:d3},
+      ])}
+      ${card(0, PAD, COL, R1, `
+        ${ctitle('Benchmark vs Standar Industri B2B Cold Outreach Indonesia')}
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+          ${bench.map(b=>`
+            <div style="background:${c2};border-radius:8px;padding:12px;">
+              <div style="font-size:9px;font-weight:700;color:${mu};text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;">${b.name}</div>
+              <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px;">
+                <span style="color:${mu};">Industri B2B</span><span style="color:${mu};font-weight:600;">${b.ind}</span>
+              </div>
+              <div style="height:1px;background:${br};margin-bottom:6px;"></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <span style="font-size:10px;color:${mu};">Kampanye ini</span>
+                <span style="font-size:26px;font-weight:800;color:${tx};">${b.yours}</span>
+              </div>
+              <div style="background:${b.col}22;color:${b.col};font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;display:inline-block;">${b.label}</div>
+            </div>`).join('')}
+        </div>
+      `)}
+      ${card(0, RC, COL, R1, `
+        ${ctitle('Segmen Bisnis — Kategori Lead')}
+        ${cimg(ovI['ch-category'], ci(R1))}
+      `)}
+      ${card(R1+GAP, PAD, COL, R2, `
+        ${ctitle('Distribusi Status Lead — Funnel Kumulatif')}
+        ${cimg(ovI['ch-status'], ci(R2))}
+      `)}
+      ${card(R1+GAP, RC, COL, R2, `
+        ${ctitle('Ringkasan Kampanye &amp; Prioritas Taktis')}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:2px;">
+          <div>
+            <div style="font-size:9.5px;font-weight:700;background:#0a2e1e;color:${d3};padding:3px 8px;border-radius:4px;display:inline-block;margin-bottom:9px;">Yang Sudah Dicapai</div>
+            ${[
+              `Scraping <b>${total.toLocaleString()}</b> data bisnis di <b>${cities.length} kota</b>`,
+              `<b>${waCount.toLocaleString()}</b> lead punya nomor WA aktif (${waPct}%)`,
+              `Response rate <b>${rRate}%</b> — standar B2B 1–5%, ini ${rN>=5?'3.8× di atas rata-rata':'kompetitif'}`,
+              `<b>${hot}</b> hot leads teridentifikasi di ${topHotCities}`,
+              `<b>${responded.toLocaleString()}</b> leads memberikan respons positif (${((responded/contacted)*100).toFixed(1)}% response rate)`,
+            ].map(t=>`<div style="font-size:10px;color:${mu};margin-bottom:8px;padding-left:14px;position:relative;line-height:1.5;"><span style="position:absolute;left:0;color:${gm};">→</span>${t}</div>`).join('')}
+          </div>
+          <div>
+            <div style="font-size:9.5px;font-weight:700;background:#2e1a00;color:${go};padding:3px 8px;border-radius:4px;display:inline-block;margin-bottom:9px;">Prioritas Taktis Minggu Ini</div>
+            ${[
+              `Follow-up langsung ke <b>${hot} hot leads</b> oleh sales lapangan — peluang closing terdekat`,
+              `Re-broadcast leads <b>"Contacted"</b> dengan angle baru: testimoni proyek nyata, sebelum/sesudah`,
+              `${rN>=5?'Pertahankan tone pesan saat ini — response rate sudah sangat kompetitif':'Uji variasi pesan WA dengan nama bisnis + pain point spesifik'}`,
+            ].map(t=>`<div style="font-size:10px;color:${mu};margin-bottom:8px;padding-left:14px;position:relative;line-height:1.5;"><span style="position:absolute;left:0;color:${go};">→</span>${t}</div>`).join('')}
+            <div style="margin-top:10px;padding:8px 10px;background:#1a1a22;border-radius:6px;border-left:3px solid ${gm};">
+              <div style="font-size:9px;color:${mu};line-height:1.45;">📌 Rekomendasi Strategis Jangka Menengah (6 poin hasil evaluasi) tersedia lengkap di <b style="color:${tx};">Halaman 5</b></div>
+            </div>
+          </div>
+        </div>
+      `)}
+    `), false);
+
+    // ════════════════════════════════════════════════
+    // PAGE 3 — PIPELINE & HOT LEADS  (absolute)
+    // Left col: Funnel (F1=480) + WA chart (F2=346)
+    // Right col: Hot leads full height (CH=838)
+    // ════════════════════════════════════════════════
+    const hotLeads = d.filter(isHot).sort((a,b)=>(b.priorityScore||0)-(a.priorityScore||0)).slice(0,12);
+    const funnel = [
+      {label:'Data Scraped',       n:total,     color:'#555566'},
+      {label:'Nomor WA Aktif',     n:waCount,   color:'#25d366'},
+      {label:'Berhasil Dikontak',  n:contacted, color:d2},
+      {label:'Memberi Respons',    n:responded, color:d1},
+      {label:'Hot Lead',           n:hot,       color:go},
+      {label:'Won (Konversi)',      n:won,       color:d3},
+    ];
+    const F1=480, F2=CH-F1-GAP;  // 346
+    await renderPage(pg(`
+      ${hdr('Pipeline &amp; Konversi', 3)}
+      ${kpiStrip([
+        {label:'Total Scraped',     val:total.toLocaleString(),     sub:'data bisnis',      color:mu},
+        {label:'WA Aktif',          val:waCount.toLocaleString(),   sub:waPct+'% coverage', color:'#25d366'},
+        {label:'Berhasil Dikontak', val:contacted.toLocaleString(), sub:'WA broadcast',     color:d2},
+        {label:'Merespons',         val:responded.toLocaleString(), sub:'rate '+rRate+'%',  color:d1},
+        {label:'Hot Lead',          val:hot.toLocaleString(),       sub:'siap closing',     color:go},
+      ])}
+      ${card(0, PAD, COL, F1, `
+        ${ctitle('Funnel Konversi Kampanye')}
+        ${funnel.map(s=>`
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <div style="font-size:10px;color:${mu};width:152px;flex-shrink:0;text-align:right;">${s.label}</div>
+            <div style="flex:1;background:${c2};border-radius:4px;height:28px;position:relative;overflow:hidden;">
+              <div style="position:absolute;top:0;left:0;bottom:0;width:${Math.max((s.n/total*100),0.5).toFixed(1)}%;background:${s.color};border-radius:4px;display:flex;align-items:center;padding:0 8px;min-width:44px;">
+                <span style="font-size:10.5px;font-weight:700;color:#fff;white-space:nowrap;">${s.n.toLocaleString()}</span>
+              </div>
+            </div>
+            <div style="font-size:10px;color:${mu};width:44px;flex-shrink:0;text-align:right;">${((s.n/total)*100).toFixed(1)}%</div>
+          </div>`).join('')}
+      `)}
+      ${card(F1+GAP, PAD, COL, F2, `
+        ${ctitle('Reachability via WhatsApp')}
+        ${cimg(piI['ch-wa'], ci(F2))}
+      `)}
+      ${card(0, RC, COL, CH, `
+        ${ctitle(`Hot Leads — Prioritas Follow-up Sales &nbsp;<span style="background:#c0392b;color:#fff;font-size:9px;padding:2px 7px;border-radius:10px;">${hotLeads.length}</span>`)}
+        ${hotLeads.length === 0
+          ? `<div style="color:${mu};font-size:11px;">Belum ada hot leads.</div>`
+          : hotLeads.map((r,i)=>`
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid ${br};">
+              <div style="font-size:11px;color:${mu};width:20px;flex-shrink:0;font-weight:700;">${i+1}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:11.5px;font-weight:600;color:${tx};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(r.title)}</div>
+                <div style="font-size:10px;color:${mu};margin-top:2px;">${esc(r.city)} · ${esc(r.categoryName)} · Rating ${r.totalScore||'—'} · Skor AI ${r.priorityScore}</div>
+              </div>
+              <div style="display:flex;gap:4px;flex-shrink:0;">
+                <span style="background:${go}22;color:${go};font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;">HOT</span>
+                ${r.waExist?`<span style="background:#0a2a18;color:#25d366;font-size:9px;padding:2px 6px;border-radius:4px;">WA</span>`:''}
+              </div>
+            </div>`).join('')}
+      `)}
+    `), false);
+
+    // ════════════════════════════════════════════════
+    // PAGE 4 — GEOGRAPHIC  (absolute)
+    // KPI strip = top 5 cities
+    // Left col 60% (GL=787): city chart full CH
+    // Right col 40% (GR=513): province top 50% + hot+resp bottom 50%
+    // ════════════════════════════════════════════════
+    const cityM={}; d.forEach(r=>{if(r.city)cityM[r.city]=(cityM[r.city]||0)+1;});
+    const top5 = Object.entries(cityM).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const GL=Math.round(CW*0.60), GR=CW-GL-GAP;  // 787, 513
+    const GRC=PAD+GL+GAP;                          // right col left
+    const GR1=Math.round(CH*0.50), GR2=CH-GR1-GAP; // 419, 407
+    await renderPage(pg(`
+      ${hdr('Sebaran Geografis', 4)}
+      <div style="position:absolute;top:${HDR}px;left:0;width:${PW}px;height:${KPI}px;
+        display:grid;grid-template-columns:repeat(${Math.min(top5.length,5)},1fr);gap:10px;
+        padding:12px ${PAD}px;box-sizing:border-box;">
+        ${top5.map(([city,n])=>`
+          <div style="background:${c1};border:1px solid ${br};border-top:2px solid ${d1};border-radius:8px;padding:10px 14px;">
+            <div style="font-size:8px;text-transform:uppercase;letter-spacing:.8px;color:${mu};margin-bottom:3px;">${esc(city)}</div>
+            <div style="font-size:22px;font-weight:800;color:${d1};line-height:1;">${n.toLocaleString()}</div>
+            <div style="font-size:9px;color:${mu};margin-top:2px;">${((n/total)*100).toFixed(1)}% dari total</div>
+          </div>`).join('')}
+      </div>
+      ${card(0, PAD, GL, CH, `
+        ${ctitle('Top 10 Kota — Jumlah Lead')}
+        ${cimg(geoI['ch-city'], ci(CH))}
+      `)}
+      ${card(0, GRC, GR, GR1, `
+        ${ctitle('Distribusi Provinsi')}
+        ${cimg(geoI['ch-prov'], ci(GR1))}
+      `)}
+      ${card(GR1+GAP, GRC, GR, GR2, `
+        ${ctitle('Hot Leads &amp; Response Rate per Kota')}
+        ${cimg(geoI['ch-hot-city'], Math.floor((ci(GR2)-8)/2))}
+        <div style="height:8px;"></div>
+        ${cimg(geoI['ch-resp-city'], Math.floor((ci(GR2)-8)/2))}
+      `)}
+    `), false);
+
+    // ════════════════════════════════════════════════
+    // PAGE 5 — WA AI INSIGHTS & REKOMENDASI STRATEGIS
+    // No KPI strip — content starts immediately after header (top:52px)
+    // Left col: 4 Hambatan Konversi (pain points)
+    // Right col: 6 Rekomendasi Strategis Jangka Menengah
+    // ════════════════════════════════════════════════
+    const CT5 = HDR;               // 52 — no KPI strip
+    const CH5 = PH - CT5 - 12;    // 926px available
+    // card helper for page 5 (content zone starts at CT5, not CT)
+    const c5 = (t,l,w,h,body) => `
+      <div style="position:absolute;top:${CT5+t}px;left:${l}px;width:${w}px;height:${h}px;
+        background:${c1};border:1px solid ${br};border-radius:10px;
+        padding:14px 16px;box-sizing:border-box;overflow:hidden;">
+        ${body}
+      </div>`;
+
+    const w5 = WA_INSIGHTS;
+    await renderPage(pg(`
+      ${hdr('WA AI Insights &amp; Rekomendasi Strategis', 5)}
+      ${c5(0, PAD, COL, CH5, `
+        <div style="font-size:11px;font-weight:700;color:${tx};margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid ${br};">
+          ⚠ Hambatan Konversi yang Teridentifikasi
+          <span style="font-size:9px;font-weight:400;color:${mu};margin-left:8px;">Dari analisis interaksi WA Agent · ${w5.updated}</span>
+        </div>
+        ${w5.painPoints.map((p, i) => `
+          <div style="padding-bottom:14px;margin-bottom:14px;${i < w5.painPoints.length-1 ? 'border-bottom:1px solid '+br+';' : ''}">
+            <div style="font-size:12px;font-weight:700;color:${tx};margin-bottom:5px;">${p.emoji} ${esc(p.title)}</div>
+            <div style="font-size:10px;color:${mu};line-height:1.55;margin-bottom:6px;">${esc(p.desc)}</div>
+            ${p.quotes.slice(0,2).map(q => `
+              <div style="font-size:9.5px;color:${d1};font-style:italic;border-left:2px solid ${d1};padding-left:8px;margin-bottom:4px;line-height:1.4;">${esc(q)}</div>`).join('')}
+          </div>`).join('')}
+      `)}
+      ${c5(0, RC, COL, CH5, `
+        <div style="font-size:11px;font-weight:700;color:${tx};margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid ${br};">
+          ✅ Rekomendasi Strategis Jangka Menengah
+          <span style="font-size:9px;font-weight:400;color:${mu};margin-left:8px;">Hasil evaluasi & diskusi tim</span>
+        </div>
+        ${w5.actions.map((a, i) => `
+          <div style="display:flex;gap:10px;padding-bottom:11px;margin-bottom:11px;${i < w5.actions.length-1 ? 'border-bottom:1px solid '+br+';' : ''}align-items:flex-start;">
+            <div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,${gm},${go});
+              display:flex;align-items:center;justify-content:center;
+              font-size:9px;font-weight:800;color:#fff;flex-shrink:0;margin-top:1px;">${i+1}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:11px;font-weight:700;color:${tx};margin-bottom:4px;">${esc(a.title)}</div>
+              <div style="font-size:9.5px;color:${mu};line-height:1.45;">${esc(a.desc)}</div>
+            </div>
+          </div>`).join('')}
+      `)}
+    `), false);
+
+    document.body.removeChild(box);
+    showPage('overview', document.querySelector('[data-page="overview"]'));
+    pdf.save(`gaung-${currentClient.id}-report-${new Date().toISOString().split('T')[0]}.pdf`);
+
+  } catch(e) {
+    console.error(e);
+    showError('Gagal membuat PDF: ' + e.message);
+  }
+  btn.textContent = origText;
+  btn.disabled = false;
+}
+
+// ══════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════
+function badgeCls(s) {
+  if (!s) return 'b-def';
+  if (s === 'won')              return 'b-won';
+  if (s === 'lost')             return 'b-lost';
+  if (s === 'hot lead')         return 'b-hot';
+  if (s === 'invoice sent')     return 'b-invoice';
+  if (s === 'response received')return 'b-response';
+  if (s === 'contacted')        return 'b-contact';
+  if (s === 'new lead')         return 'b-new';
+  if (s === 'no whatsapp')      return 'b-nowa';
+  return 'b-def';
+}
+
+const capStatus = s => s ? s.split(' ').map(w=>w[0]?.toUpperCase()+w.slice(1)).join(' ') : '—';
+const esc = v => String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function destroyCharts() { Object.values(charts).forEach(c=>{try{c.destroy()}catch(e){}}); charts={}; }
+
+function showMain(show) {
+  document.getElementById('loading-screen').style.display = show ? 'none' : 'flex';
+  document.getElementById('main').style.display = show ? 'flex' : 'none';
+}
+function showError(msg) { const e=document.getElementById('error-banner'); e.textContent=msg; e.style.display='block'; }
+function hideError()    { document.getElementById('error-banner').style.display='none'; }
+</script>
+</body>
+</html>
