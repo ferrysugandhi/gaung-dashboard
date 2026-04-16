@@ -373,6 +373,18 @@
         <div id="priority-list" style="max-height:240px;overflow-y:auto"></div>
       </div>
     </div>
+    <div class="chart-row c2">
+      <div class="chart-card">
+        <div class="ct-title">📦 Tipe Lead (Aplikator vs Reseller)</div>
+        <div class="ct-desc" id="desc-leadtype-ov"></div>
+        <div class="cw" style="height:220px"><canvas id="ch-leadtype"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="ct-title">✅ WA Rate per Tipe Lead</div>
+        <div class="ct-desc" id="desc-wa-leadtype"></div>
+        <div class="cw" style="height:220px"><canvas id="ch-wa-leadtype"></canvas></div>
+      </div>
+    </div>
   </div>
 
   <!-- ════ PIPELINE ════════════════════════ -->
@@ -428,6 +440,19 @@
         <div class="cw" style="height:180px"><canvas id="ch-resp-city"></canvas></div>
       </div>
     </div>
+    <div class="chart-card" style="margin-top:16px">
+      <div class="ct-title">📦 Perbandingan Tipe Lead</div>
+      <div class="ct-desc" id="desc-leadtype">Breakdown Aplikator vs Reseller berdasarkan status pipeline.</div>
+      <div class="table-wrap" style="margin-top:12px">
+        <table>
+          <thead><tr>
+            <th>Tipe Lead</th><th>Total</th><th>WA Aktif</th>
+            <th>New Lead</th><th>Dikontak</th><th>Responded</th><th>Hot Lead</th>
+          </tr></thead>
+          <tbody id="leadtype-table-body"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- ════ PETA LEADS ════════════════════════ -->
@@ -454,6 +479,7 @@
         <option value="yes">WA: Ada</option>
         <option value="no">WA: Tidak Ada</option>
       </select>
+      <select class="fsel" id="f-leadtype" onchange="applyFilters()"><option value="">Semua Tipe</option></select>
       <input class="fsrch" id="f-search" placeholder="Cari nama bisnis…" oninput="applyFilters()">
       <span class="freset" onclick="resetFilters()">✕ Reset</span>
       <span class="filter-count" id="f-count"></span>
@@ -485,6 +511,8 @@
 <script>
 // ══════════════════════════════════════════════════════
 // CONFIG
+const AGENCY_PW = 'sukses8899';
+
 // ══════════════════════════════════════════════════════
 const CLIENTS = [
   {
@@ -629,8 +657,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (stored === c.password) { showMain(true); loadData(); }
     else showLoginFor(c);
   } else {
-    buildSidebar();
-    activate(CLIENTS[0]);
+    // Agency mode — require password to view internal dashboard
+    const stored = sessionStorage.getItem('auth_agency');
+    if (stored === AGENCY_PW) {
+      buildSidebar();
+      activate(CLIENTS[0]);
+    } else {
+      currentClient = { id: 'agency', full: 'GAUNG.ai — Internal Dashboard', password: AGENCY_PW };
+      showLoginFor(currentClient);
+    }
   }
 });
 
@@ -684,7 +719,13 @@ function doLogin() {
     sessionStorage.setItem('auth_' + currentClient.id, pw);
     document.getElementById('login-screen').classList.remove('show');
     document.getElementById('lc-err').style.display = 'none';
-    showMain(true); loadData();
+    if (currentClient.id === 'agency') {
+      // Agency login — show sidebar & load first client
+      buildSidebar();
+      activate(CLIENTS[0]);
+    } else {
+      showMain(true); loadData();
+    }
   } else {
     document.getElementById('lc-err').style.display = 'block';
     document.getElementById('lc-pw').value = '';
@@ -762,6 +803,9 @@ function normalizeRow(r) {
     potentialValue: parseMoney(r['potential value']),
     wonValue:       parseMoney(r['won value']),
     lastContactDate: parseDate(r['last contact date']),
+    lat:            parseFloat(r['latitude'])  || null,
+    lng:            parseFloat(r['longitude']) || null,
+    leadType:       str(r['leadType']) || '',
   };
 }
 const parseMoney = v => parseFloat(String(v||'').replace(/[^0-9.]/g,'')) || 0;
@@ -903,6 +947,54 @@ function renderOverview() {
   });
   document.getElementById('desc-score').textContent =
     `${bcounts[3]} leads (${((bcounts[3]/total)*100).toFixed(0)}%) memiliki rating 4–5 bintang di Google Maps — indikator bisnis yang aktif dan terpercaya. Data berkualitas tinggi ini meningkatkan peluang konversi.`;
+
+  // Lead Type donut
+  const ltMap = {};
+  d.forEach(r => { const k = r.leadType || 'Lainnya'; ltMap[k] = (ltMap[k]||0)+1; });
+  const ltEntries = Object.entries(ltMap).sort((a,b)=>b[1]-a[1]);
+  const ltColors  = ['#a78bfa','#34d399','#f59e0b','#4f8ef7','#f87171'];
+  if (document.getElementById('ch-leadtype')) {
+    charts.leadtype = new Chart(document.getElementById('ch-leadtype'), {
+      type:'doughnut',
+      data:{ labels:ltEntries.map(e=>e[0]), datasets:[{ data:ltEntries.map(e=>e[1]), backgroundColor:ltColors.slice(0,ltEntries.length), borderWidth:2, borderColor:'#1e1e23' }] },
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'55%',
+        plugins:{ legend:{ position:'right', labels:{ color:'#7a7a8e', boxWidth:10, padding:8, font:{size:10} } },
+          tooltip:{ callbacks:{ label:c=>` ${c.raw.toLocaleString()} (${((c.raw/total)*100).toFixed(1)}%)` } }
+        }
+      }
+    });
+    document.getElementById('desc-leadtype-ov').textContent =
+      ltEntries.length > 1
+        ? ltEntries.map(e=>`${e[0]}: ${e[1].toLocaleString()} leads`).join(' · ')
+        : 'Hanya satu tipe lead yang terdata — tambahkan kolom "leadType" di sheet untuk breakdown ini.';
+  }
+
+  // WA rate per lead type bar chart
+  const ltWAMap = {};
+  d.forEach(r => {
+    const k = r.leadType || 'Lainnya';
+    if (!ltWAMap[k]) ltWAMap[k] = { total:0, wa:0 };
+    ltWAMap[k].total++;
+    if (r.waExist) ltWAMap[k].wa++;
+  });
+  const ltWAEntries = Object.entries(ltWAMap).sort((a,b)=>b[1].total-a[1].total);
+  if (document.getElementById('ch-wa-leadtype')) {
+    charts.waLeadtype = new Chart(document.getElementById('ch-wa-leadtype'), {
+      type:'bar',
+      data:{ labels:ltWAEntries.map(e=>e[0]),
+        datasets:[{ label:'WA Rate (%)', data:ltWAEntries.map(e=>e[1].total>0?(e[1].wa/e[1].total*100).toFixed(1):0),
+          backgroundColor:'#25d36699', borderRadius:5, borderSkipped:false }]
+      },
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:c=>` ${c.raw}% WA aktif` } } },
+        scales:{ x:{grid:{display:false},ticks:{color:'#7a7a8e'}}, y:{grid:{color:'#2e2e38'},ticks:{color:'#7a7a8e',callback:v=>v+'%'},max:100} }
+      }
+    });
+    const bestLT = ltWAEntries.reduce((a,b)=>(b[1].wa/b[1].total)>(a[1].wa/a[1].total)?b:a, ltWAEntries[0]);
+    document.getElementById('desc-wa-leadtype').textContent = bestLT
+      ? `${bestLT[0]} memiliki WA rate tertinggi: ${((bestLT[1].wa/bestLT[1].total)*100).toFixed(1)}% dari ${bestLT[1].total.toLocaleString()} leads.`
+      : '';
+  }
 }
 
 // ── WA INSIGHTS ───────────────────────────────────────
@@ -1112,6 +1204,41 @@ function renderGeographic() {
   const bestRate = Math.max(...rRates);
   document.getElementById('desc-response-city').textContent =
     `${bestCity} memiliki response rate tertinggi (${bestRate}%). Kota dengan response rate tinggi mengindikasikan pasar yang lebih reseptif terhadap produk FIRA.`;
+
+  renderLeadTypeTable();
+}
+
+function renderLeadTypeTable() {
+  const el = document.getElementById('leadtype-table-body');
+  if (!el) return;
+
+  const types = [...new Set(allData.map(r => r.leadType || 'Lainnya'))].sort();
+  const rows = types.map(t => {
+    const d = allData.filter(r => (r.leadType || 'Lainnya') === t);
+    const total     = d.length;
+    const wa        = d.filter(r => r.waExist).length;
+    const newLead   = d.filter(r => r.status === 'new lead').length;
+    const contacted = d.filter(isContacted).length;
+    const responded = d.filter(isResponded).length;
+    const hot       = d.filter(isHot).length;
+    const waPct     = total > 0 ? ((wa/total)*100).toFixed(1) : '0';
+    return `<tr>
+      <td style="font-weight:700">${esc(t)}</td>
+      <td>${total.toLocaleString()}</td>
+      <td>${wa.toLocaleString()} <span style="color:var(--muted);font-size:10px">(${waPct}%)</span></td>
+      <td>${newLead.toLocaleString()}</td>
+      <td>${contacted.toLocaleString()}</td>
+      <td>${responded.toLocaleString()}</td>
+      <td>${hot.toLocaleString()}</td>
+    </tr>`;
+  });
+  el.innerHTML = rows.join('');
+
+  const types2 = [...new Set(allData.map(r => r.leadType).filter(Boolean))];
+  document.getElementById('desc-leadtype').textContent =
+    types2.length > 0
+      ? `Dashboard mencakup ${types2.length} tipe lead: ${types2.join(' dan ')}.`
+      : 'Kolom tipe lead belum terisi — data Reseller dan Aplikator akan tampil di sini.';
 }
 
 // ── LEADS TABLE ───────────────────────────────────────
@@ -1119,24 +1246,28 @@ function buildFilters() {
   const statuses   = [...new Set(allData.map(r=>r.status).filter(Boolean))].sort((a,b)=>pipelineOrder.indexOf(a)-pipelineOrder.indexOf(b));
   const cities     = [...new Set(allData.map(r=>r.city).filter(Boolean))].sort();
   const categories = [...new Set(allData.map(r=>r.categoryName).filter(Boolean))].sort();
+  const leadTypes  = [...new Set(allData.map(r=>r.leadType).filter(Boolean))].sort();
   document.getElementById('f-status').innerHTML   = '<option value="">Semua Status</option>'   + statuses.map(s=>`<option value="${s}">${capStatus(s)}</option>`).join('');
   document.getElementById('f-city').innerHTML     = '<option value="">Semua Kota</option>'     + cities.map(c=>`<option>${c}</option>`).join('');
   document.getElementById('f-category').innerHTML = '<option value="">Semua Kategori</option>' + categories.map(c=>`<option>${esc(c)}</option>`).join('');
+  document.getElementById('f-leadtype').innerHTML = '<option value="">Semua Tipe</option>'     + leadTypes.map(t=>`<option>${esc(t)}</option>`).join('');
 }
 
 function applyFilters() {
-  const sv = document.getElementById('f-status').value;
-  const cv = document.getElementById('f-city').value.toLowerCase();
+  const sv  = document.getElementById('f-status').value;
+  const cv  = document.getElementById('f-city').value.toLowerCase();
   const catv = document.getElementById('f-category').value.toLowerCase();
-  const wv = document.getElementById('f-wa').value;
-  const q  = document.getElementById('f-search').value.toLowerCase();
+  const wv  = document.getElementById('f-wa').value;
+  const ltv = document.getElementById('f-leadtype').value;
+  const q   = document.getElementById('f-search').value.toLowerCase();
   filteredData = allData.filter(r => {
     if (sv   && r.status !== sv) return false;
     if (cv   && r.city.toLowerCase() !== cv) return false;
     if (catv && r.categoryName.toLowerCase() !== catv) return false;
     if (wv === 'yes' && !r.waExist) return false;
     if (wv === 'no'  &&  r.waExist) return false;
-    if (q  && !r.title.toLowerCase().includes(q) && !r.city.toLowerCase().includes(q)) return false;
+    if (ltv  && r.leadType !== ltv) return false;
+    if (q    && !r.title.toLowerCase().includes(q) && !r.city.toLowerCase().includes(q)) return false;
     return true;
   });
   currentPage = 0;
@@ -1144,7 +1275,7 @@ function applyFilters() {
 }
 
 function resetFilters() {
-  ['f-status','f-city','f-category','f-wa'].forEach(id => document.getElementById(id).value = '');
+  ['f-status','f-city','f-category','f-wa','f-leadtype'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-search').value = '';
   filteredData = [...allData];
   currentPage = 0;
@@ -1402,6 +1533,11 @@ function extractCoords(url) {
   return null;
 }
 
+function cityNormKey(city) {
+  return (city || '').toLowerCase().trim()
+    .replace(/^kota\s+/, '').replace(/^kabupaten\s+/, '');
+}
+
 function statusColor(status) {
   const map = {
     'won':'#25d366','hot lead':'#ff8a10','invoice sent':'#f59e0b',
@@ -1435,22 +1571,31 @@ function renderMap() {
   let exact = 0, cityFallback = 0, skipped = 0;
 
   allData.forEach(r => {
-    let coords = extractCoords(r.url);
-    let isExact = !!coords;
+    let coords = null;
+    let isExact = false;
 
-    if (!coords) {
-      const key = (r.city || '').toLowerCase().trim();
-      const cc  = CITY_COORDS[key];
-      if (cc) {
-        // Small jitter so city-level leads don't all stack
-        coords = [cc[0] + (Math.random()-0.5)*0.06, cc[1] + (Math.random()-0.5)*0.06];
-        cityFallback++;
-      } else {
-        skipped++;
-        return;
-      }
-    } else {
+    if (r.lat && r.lng) {
+      coords = [r.lat, r.lng];
+      isExact = true;
       exact++;
+    } else {
+      const urlCoords = extractCoords(r.url);
+      if (urlCoords) {
+        coords = urlCoords;
+        isExact = true;
+        exact++;
+      } else {
+        const key = cityNormKey(r.city);
+        const cc  = CITY_COORDS[key];
+        if (cc) {
+          // Small jitter so city-level leads don't all stack
+          coords = [cc[0] + (Math.random()-0.5)*0.06, cc[1] + (Math.random()-0.5)*0.06];
+          cityFallback++;
+        } else {
+          skipped++;
+          return;
+        }
+      }
     }
 
     const color = statusColor(r.status);
